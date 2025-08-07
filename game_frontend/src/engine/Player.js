@@ -19,6 +19,9 @@ const DASH_VELOCITY = 260;
 const GAME_WIDTH = 320;
 const GAME_HEIGHT = 180;
 
+// Maximum number of jumps (triple jump: 3)
+const MAX_JUMPS = 3;
+
 // PUBLIC_INTERFACE
 export default class Player {
   /**
@@ -32,9 +35,12 @@ export default class Player {
     this.vy = 0;
     this.onGround = false;
     this.wasOnGround = false;
-    this.hasDoubleJumped = false;
     this.dashAvailable = true;
     this.facing = 1; // 1: right, -1: left
+
+    this.jumpCount = 0; // Number of jumps performed since last landing
+    this.inputJumpBuffered = false; // To buffer jump press between frames
+
     // Debug
     this._debugLastCollidePlatform = null;
   }
@@ -177,37 +183,30 @@ export default class Player {
         this.vy = 0;
         flushGrounded = true;
         this.dashAvailable = true;
-        this.hasDoubleJumped = false; // Reset double jump on ground
-        this._doubleJumpAvailable = true; // Track extra state for safety
+        this.jumpCount = 0; // Reset jump counter on ground
       }
     }
     this.onGround = flushGrounded;
 
-    // --- 8. Jumping: double jump logic ---
-    // Only allow first jump from ground, then exactly one in air ("double jump")
-    // Releasing/re-pressing required for both
-    if (typeof this._doubleJumpAvailable === "undefined") this._doubleJumpAvailable = true;
-
+    // --- 8. Jumping: triple jump logic ---
+    // Only allow a jump when:
+    //   - On ground (first jump)
+    //   - Or < MAX_JUMPS jumps have been made since last landing (allow up to 2 mid-air)
+    // Requires fresh press ("jumpPressed" buffer in controls)
     if (controls.jumpPressed) {
-      if (this.onGround) {
-        // First jump from ground
-        this.vy = JUMP_VELOCITY;
+      if (
+          (this.onGround && this.jumpCount === 0) ||
+          (!this.onGround && this.jumpCount > 0 && this.jumpCount < MAX_JUMPS)
+        ) {
+        this.vy = JUMP_VELOCITY * (this.jumpCount === 0 ? 1.0 : 0.93); // Slightly less power for air jumps
+        this.jumpCount += 1;
         this.onGround = false;
-        this.hasDoubleJumped = false;
-        this._doubleJumpAvailable = true;
-      } else if (this._doubleJumpAvailable && !this.hasDoubleJumped) {
-        // Allow one mid-air jump
-        this.vy = JUMP_VELOCITY * 0.94;
-        this.hasDoubleJumped = true;
-        this._doubleJumpAvailable = false;
       }
     }
 
-    // If falling all the way or descending, reset double jump if snapped to world ground
-    // (in case platforms are missed)
+    // Snap/jump reset for world ground edge-case (fallback)
     if (this.y >= GAME_HEIGHT - PLAYER_HEIGHT - 1) {
-      this._doubleJumpAvailable = true;
-      this.hasDoubleJumped = false;
+      this.jumpCount = 0;
     }
 
     // --- 9. World bounds clamp (retro)
@@ -218,6 +217,7 @@ export default class Player {
       this.y = GAME_HEIGHT - PLAYER_HEIGHT - 1;
       this.vy = 0;
       this.onGround = true;
+      this.jumpCount = 0;
     }
   }
 
@@ -243,3 +243,4 @@ export default class Player {
     // future: callback used in engine if needed
   }
 }
+
