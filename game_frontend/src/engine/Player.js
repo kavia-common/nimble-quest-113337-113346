@@ -1,14 +1,13 @@
 //
 // Player.js - Refined: Robust pixel-perfect retro platformer physics, collision, and debug visualization.
 //
-/*
-  Responsibilities:
-    - Accurate physics integration (position, velocity, "flush" platform snapping)
-    - Strict jump restriction to only when in contact with platform/floor below
-    - No sinking or hovering—player's bbox lands flat on surface
-    - Correct AABB math for all collision, including collectibles
-    - Debug: Bounding box render & collision console diagnostics
-*/
+// Responsibilities:
+//   - Accurate physics integration (position, velocity, "flush" platform snapping)
+//   - Strict jump restriction to only when in contact with platform/floor below
+//   - No sinking or hovering—player's bbox lands flat on surface
+//   - Correct AABB math for all collision, including collectibles
+//   - Debug: Bounding box render & collision console diagnostics
+//
 
 const PLAYER_WIDTH = 12;
 const PLAYER_HEIGHT = 14;
@@ -21,6 +20,11 @@ const GAME_HEIGHT = 180;
 
 // Maximum number of jumps (triple jump: 3)
 const MAX_JUMPS = 3;
+
+// Wall jump settings
+const WALL_JUMP_X_VELOCITY = 150;
+const WALL_JUMP_Y_VELOCITY = -170;
+const WALL_JUMP_BUFFER_TIME = 0.16; // seconds: leeway after leaving wall for jump
 
 // PUBLIC_INTERFACE
 export default class Player {
@@ -40,6 +44,12 @@ export default class Player {
 
     this.jumpCount = 0; // Number of jumps performed since last landing
     this.inputJumpBuffered = false; // To buffer jump press between frames
+
+    // Wall-jump-related fields
+    this.touchingWallLeft = false;
+    this.touchingWallRight = false;
+    this.lastWallDir = 0; // -1 for left, 1 for right
+    this.wallJumpBufferTimer = 0; // seconds left for a wall-jump after leaving wall
 
     // Debug
     this._debugLastCollidePlatform = null;
@@ -99,12 +109,37 @@ export default class Player {
   // PUBLIC_INTERFACE
   /**
    * Integrate player movement, flush snap, ground state, and jump/collision handling with strict AABB guarantees.
+   * Adds wall jump logic as well as multi-jump.
    * @param {number} dt - Delta time (seconds)
    * @param {object} controls - { left, right, jumpPressed, dashPressed }
    * @param {function} collisionTester - function (x, y, w, h) => boolean
    */
   update(dt, controls, collisionTester) {
     this.wasOnGround = this.onGround;
+
+    // --- Wall contact detection for wall jump mechanic ---
+    let leftWall = false, rightWall = false;
+    if (collisionTester) {
+      // Check at left/right sides of the player bounding box.
+      leftWall = collisionTester(this.x - 1, this.y, 1, PLAYER_HEIGHT);
+      rightWall = collisionTester(this.x + PLAYER_WIDTH, this.y, 1, PLAYER_HEIGHT);
+    }
+    this.touchingWallLeft = leftWall;
+    this.touchingWallRight = rightWall;
+
+    // Determine if wall buffer should be started or refreshed
+    if (!this.onGround && (leftWall || rightWall)) {
+      this.lastWallDir = leftWall ? -1 : (rightWall ? 1 : 0);
+      this.wallJumpBufferTimer = WALL_JUMP_BUFFER_TIME;
+    } else if (!this.onGround && this.wallJumpBufferTimer > 0) {
+      // Decrease buffer if airborne and not touching wall
+      this.wallJumpBufferTimer -= dt;
+      if (this.wallJumpBufferTimer < 0) this.wallJumpBufferTimer = 0;
+    } else {
+      // Not eligible
+      this.lastWallDir = 0;
+      this.wallJumpBufferTimer = 0;
+    }
 
     // --- 1. Handle horizontal movement & facing
     if (controls.left) {
@@ -188,16 +223,31 @@ export default class Player {
     }
     this.onGround = flushGrounded;
 
-    // --- 8. Jumping: triple jump logic ---
-    // Only allow a jump when:
-    //   - On ground (first jump)
-    //   - Or < MAX_JUMPS jumps have been made since last landing (allow up to 2 mid-air)
-    // Requires fresh press ("jumpPressed" buffer in controls)
+    // --- 8. Jumping: now supports wall-jump and triple-jump logic ---
     if (controls.jumpPressed) {
+      let didWallJump = false;
       if (
+        !this.onGround &&
+        this.wallJumpBufferTimer > 0 &&
+        this.lastWallDir !== 0
+      ) {
+        // Perform wall jump
+        this.vy = WALL_JUMP_Y_VELOCITY;
+        this.vx = -this.lastWallDir * WALL_JUMP_X_VELOCITY;
+        this.jumpCount = 1; // After wall jump, allow mid-air jumps
+        this.wallJumpBufferTimer = 0;
+        didWallJump = true;
+        this.facing = -this.lastWallDir;
+        this.onGround = false;
+      }
+      // Only do regular jump if not just wall-jumped
+      if (
+        !didWallJump &&
+        (
           (this.onGround && this.jumpCount === 0) ||
           (!this.onGround && this.jumpCount > 0 && this.jumpCount < MAX_JUMPS)
-        ) {
+        )
+      ) {
         this.vy = JUMP_VELOCITY * (this.jumpCount === 0 ? 1.0 : 0.93); // Slightly less power for air jumps
         this.jumpCount += 1;
         this.onGround = false;
@@ -205,8 +255,10 @@ export default class Player {
     }
 
     // Snap/jump reset for world ground edge-case (fallback)
+    // Also, if grounded, wall-jump buffer is cancelled.
     if (this.y >= GAME_HEIGHT - PLAYER_HEIGHT - 1) {
       this.jumpCount = 0;
+      this.wallJumpBufferTimer = 0;
     }
 
     // --- 9. World bounds clamp (retro)
