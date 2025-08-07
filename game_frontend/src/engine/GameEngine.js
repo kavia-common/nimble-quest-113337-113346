@@ -4,6 +4,7 @@ import Player from './Player';
 import * as Physics from './Physics';
 import LEVELS from './levels';
 import { createEnemyInstance, updateEnemies } from './Enemy';
+import { VisualEffects, ParallaxBackground } from './VisualEffects';
 
 /**
  * GameEngine - Main orchestrator for multi-level loop, rendering, and simulation.
@@ -27,8 +28,53 @@ const COLORS = {
   exit: '#ef5bc2'
 };
 
+// Load parallax background layers (stub: replace with real images as needed)
+const backgroundAssets = [];
+let loadedBGImgs = [];
+
+// Example: You may later place rich backgrounds in src/assets/img/bg_*.png
+function loadParallaxBGImages() {
+  // Preload up to three layers for parallax, real assets should be added here
+  if (!backgroundAssets.length) {
+    ['bg_layer0', 'bg_layer1', 'bg_layer2'].forEach((base, idx) => {
+      const img = new window.Image();
+      // For now, fallback to color stripes or gradients. Replace with pixel-art .pngs to upgrade.
+      img.src = '';
+      if (!img.src) {
+        // Fallback: draw a gradient to canvas, then export as image
+        const c = document.createElement('canvas');
+        c.width = 800; c.height = 180;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 0, 0, 180);
+        if (idx === 0) {
+          g.addColorStop(0, '#1e242c'); g.addColorStop(1, '#7cada5');
+        } else if (idx === 1) {
+          g.addColorStop(0, 'rgba(38,137,179,0.83)'); g.addColorStop(1, 'rgba(221,210,172,0.14)');
+        } else {
+          g.addColorStop(0, 'rgba(215, 226, 255, .14)'); g.addColorStop(1, '#18182400');
+        }
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 800, 180);
+        img.src = c.toDataURL();
+      }
+      backgroundAssets.push({ img, speed: 0.12 + 0.13 * idx, repeat: 'x' });
+    });
+    loadedBGImgs = backgroundAssets;
+  }
+}
+
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
+}
+
+// --- Visual enhancement state (setup once and on level change) ---
+let parallaxBG = null;
+function getOrInitParallaxBG(width, height) {
+  if (!loadedBGImgs.length) loadParallaxBGImages();
+  if (!parallaxBG) {
+    parallaxBG = new ParallaxBackground(loadedBGImgs, width, height);
+  }
+  return parallaxBG;
 }
 
 // Keyboard mapping: Simple acrobatics/arrow/wasd
@@ -205,8 +251,16 @@ const GameEngine = ({
 
   // Draws platforms, exit, gems, etc. for the level
   function drawLevel(ctx, curLevel, gems, completed, enemyState, projectiles) {
-    ctx.fillStyle = curLevel.bgColor || COLORS.fallbackSky;
-    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    // ---- NEW: draw multi-layer parallax or static background ----
+    if (!parallaxBG) parallaxBG = getOrInitParallaxBG(GAME_WIDTH, GAME_HEIGHT);
+    if (parallaxBG && typeof parallaxBG.draw === "function") {
+      // Optionally, scrollX could be hooked to player.x for side-scrolling
+      const scrollDX = 0; // For now: 0, for world1, later tie to camera
+      parallaxBG.draw(ctx, scrollDX);
+    } else {
+      ctx.fillStyle = curLevel.bgColor || COLORS.fallbackSky;
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
 
     // Draw platforms
     curLevel.platforms.forEach(pl => {
@@ -633,6 +687,12 @@ const GameEngine = ({
           ctx.fillStyle = "#ffd700";
           ctx.fillText(levelState.message, 52, 90);
           ctx.restore();
+        }
+
+        // --- MODERN-RETRO FINAL: CRT/Scanline/Palette Postprocessing ---
+        // (Optional: toggle with future user settings)
+        if (typeof VisualEffects?.applyCRTPass === "function") {
+          VisualEffects.applyCRTPass(ctx.canvas, { strength: 0.23, scanlineOpacity: 0.19, bloom: 0.08 });
         }
       }
 

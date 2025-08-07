@@ -11,6 +11,7 @@ import SettingsOverlay from './components/SettingsOverlay';
 import AchievementsOverlay from './components/AchievementsOverlay';
 import LeaderboardsOverlay from './components/LeaderboardsOverlay';
 import GameEngine from './engine/GameEngine';
+// Imports above may rely on enhanced visuals in ./engine/VisualEffects and rich pixel-art backgrounds.
 
 function App() {
   const [theme, setTheme] = useState('light');
