@@ -65,11 +65,11 @@ function App() {
     LEVELS[curLevel].gems.map(g => ({ ...g, collected: false }))
   );
 
-  // --- Enemy state (single patrol enemy per level) ---
-  const [enemy, setEnemy] = useState(
+  // --- Enemy state (array of all enemies per level) ---
+  const [enemies, setEnemies] = useState(
     LEVELS[curLevel].enemies && LEVELS[curLevel].enemies.length > 0
-      ? { ...LEVELS[curLevel].enemies[0] }
-      : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }
+      ? LEVELS[curLevel].enemies.map(e => ({ ...e }))
+      : [{ x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }]
   );
 
   // --- Lives count (reset on entire game restart) ---
@@ -125,9 +125,11 @@ function App() {
       onGround: false
     };
     setGems(LEVELS[curLevel].gems.map(g => ({ ...g, collected: false })));
-    setEnemy(LEVELS[curLevel].enemies && LEVELS[curLevel].enemies.length > 0
-      ? { ...LEVELS[curLevel].enemies[0] }
-      : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 });
+    setEnemies(
+      LEVELS[curLevel].enemies && LEVELS[curLevel].enemies.length > 0
+        ? LEVELS[curLevel].enemies.map(e => ({ ...e }))
+        : [{ x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }]
+    );
     setLevelComplete(false);
     setTransitionTimer(0);
   }
@@ -152,9 +154,11 @@ function App() {
         onGround: false
       };
       setGems(LEVELS[0].gems.map(g => ({ ...g, collected: false })));
-      setEnemy(LEVELS[0].enemies && LEVELS[0].enemies.length > 0
-        ? { ...LEVELS[0].enemies[0] }
-        : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 });
+      setEnemies(
+        LEVELS[0].enemies && LEVELS[0].enemies.length > 0
+          ? LEVELS[0].enemies.map(e => ({ ...e }))
+          : [{ x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }]
+      );
       setLevelComplete(false);
       setTransitionTimer(0);
       return;
@@ -177,9 +181,11 @@ function App() {
         onGround: false
       };
       setGems(LEVELS[nextIdx].gems.map(g => ({ ...g, collected: false })));
-      setEnemy(LEVELS[nextIdx].enemies && LEVELS[nextIdx].enemies.length > 0
-        ? { ...LEVELS[nextIdx].enemies[0] }
-        : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 });
+      setEnemies(
+        LEVELS[nextIdx].enemies && LEVELS[nextIdx].enemies.length > 0
+          ? LEVELS[nextIdx].enemies.map(e => ({ ...e }))
+          : [{ x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }]
+      );
     }, 50);
   }
 
@@ -193,9 +199,11 @@ function App() {
       onGround: false
     };
     setGems(LEVELS[curLevel].gems.map(g => ({ ...g, collected: false })));
-    setEnemy(LEVELS[curLevel].enemies && LEVELS[curLevel].enemies.length > 0
-      ? { ...LEVELS[curLevel].enemies[0] }
-      : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 });
+    setEnemies(
+      LEVELS[curLevel].enemies && LEVELS[curLevel].enemies.length > 0
+        ? LEVELS[curLevel].enemies.map(e => ({ ...e }))
+        : [{ x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }]
+    );
     setHud(h => ({
       ...h,
       allGems: LEVELS[curLevel].gems.length,
@@ -217,13 +225,11 @@ function App() {
 
     // PUBLIC_INTERFACE
     function defeatPlayer() {
-      // Handles defeat: decrements life, triggers death timer, sets HUD
       setHud(h => ({
         ...h,
         msg: lives > 1 ? "Ouch! Life lost." : "Game over! Press R to restart.",
         gems: 0
       }));
-      // Death/restart fully handled in main loop via deathTimer, so just flag here
     }
 
     function frame() {
@@ -232,37 +238,62 @@ function App() {
       let dt = clamp((now - lastTime) / 1000, 0, 0.045);
       lastTime = now;
 
-      // References for easy access
       const L = LEVELS[curLevel];
       const p = player.current;
 
-      // --- ENEMY update: simple patrol logic (only for first enemy if present) ---
-      let nextEnemy = { ...enemy };
-      if (nextEnemy.patrolMin !== undefined && nextEnemy.patrolMax !== undefined) {
-        nextEnemy.x += nextEnemy.dir * nextEnemy.speed * dt;
-        if (nextEnemy.x < nextEnemy.patrolMin) {
-          nextEnemy.x = nextEnemy.patrolMin;
-          nextEnemy.dir = 1;
+      // ENEMY ARRAY update: iterate all enemies and apply their simple logic if walker/hopper/chaser/projectile
+      let nextEnemies = enemies.map(e => ({ ...e }));
+      // Walker/hopper: patrol logic; chaser: nothing special here; projectile: nothing needed here
+      for (let i = 0; i < nextEnemies.length; ++i) {
+        let e = nextEnemies[i];
+        if (e.type === "walker") {
+          e.x += e.dir * (e.speed ?? 44) * dt;
+          if (e.x < (e.patrolMin ?? 0)) {
+            e.x = e.patrolMin ?? 0; e.dir = 1;
+          }
+          if (e.x > (e.patrolMax ?? (GAME_WIDTH - ENEMY_W))) {
+            e.x = e.patrolMax ?? (GAME_WIDTH - ENEMY_W); e.dir = -1;
+          }
         }
-        if (nextEnemy.x > nextEnemy.patrolMax) {
-          nextEnemy.x = nextEnemy.patrolMax;
-          nextEnemy.dir = -1;
+        if (e.type === "hopper") {
+          // Simple vertical "hop" AI (could be expanded)
+          e.jumpTimer = e.jumpTimer || 0;
+          e.vy = e.vy || 0;
+          e.jumpCooldown = e.jumpCooldown ?? 1.11;
+          if (!e.onGround) e.vy += 440 * dt;
+          e.y += e.vy * dt;
+          if (e.y > GAME_HEIGHT - ENEMY_H - 8) {
+            e.y = GAME_HEIGHT - ENEMY_H - 8;
+            e.vy = 0; e.onGround = true;
+          }
+          e.jumpTimer -= dt;
+          if (e.onGround && e.jumpTimer <= 0) {
+            e.vy = e.jumpVy || -104;
+            e.onGround = false;
+            e.jumpTimer = e.jumpCooldown;
+          }
         }
+        if (e.type === "chaser") {
+          let dx = p.x - e.x, dy = p.y - e.y;
+          if (Math.abs(dx) < (e.activeRange ?? 100) && Math.abs(dy) < 56) {
+            e.x += Math.sign(dx) * (e.speed ?? 65) * dt;
+            if (e.x < 0) e.x = 0;
+            if (e.x > GAME_WIDTH - ENEMY_W) e.x = GAME_WIDTH - ENEMY_W;
+          }
+        }
+        // projectiles are not handled in this simplified demo
       }
-      setEnemy(nextEnemy);
+      setEnemies(nextEnemies);
 
-      // --- PLATFORM collision: Improved robust solution with triple jump support ---
+      // --- PLATFORM collision ---
       let isOnGround = false;
       let standPlatform = null;
-
-      // Find platforms under player (flush or within 1px), top-most one wins
       for (let pl of L.platforms) {
-        // Must be horizontally over platform (modulo 1px wiggle)
         if (
           (p.x + PLAYER_W) > (pl.x + 0.5) &&
           (p.x + 0.5) < (pl.x + pl.w) &&
-          Math.abs((p.y + PLAYER_H) - pl.y) < 1.15 && // Flush on top (allow <1.15px)
-          p.vy >= 0 // Only consider for downward movement or standing
+          Math.abs((p.y + PLAYER_H) - pl.y) < 1.15 &&
+          p.vy >= 0
         ) {
           if ((p.y + PLAYER_H) <= pl.y + pl.h) {
             p.y = pl.y - PLAYER_H;
@@ -288,62 +319,32 @@ function App() {
 
       // --- Movement controls, physics, and triple jump logic ---
       if (!levelComplete && !transitionTimer && !deathTimer) {
-        // Horizontal move
-        if (controls.current.left) {
-          p.vx = -MOVE_SPEED;
-        } else if (controls.current.right) {
-          p.vx = MOVE_SPEED;
-        } else {
-          p.vx = 0;
-        }
-
-        // Gravity always
+        if (controls.current.left) p.vx = -MOVE_SPEED;
+        else if (controls.current.right) p.vx = MOVE_SPEED;
+        else p.vx = 0;
         p.vy += GRAVITY * dt;
 
-        // -- TRIPLE JUMP HANDLING --
-        // Jump only if less than MAX_JUMPS performed since last landing
         if (controls.current.jumpPressed) {
-          if (isOnGround) {
-            // Grounded: fresh jump (reset)
-            p.vy = JUMP_VEL;
-            p.jumpCount = 1;
-            isOnGround = false;
-          } else if (p.jumpCount < MAX_JUMPS) {
-            // In-air extra jump
-            p.vy = JUMP_VEL * 0.93; // Slightly reduced power for extra jumps
-            p.jumpCount += 1;
-          }
+          if (isOnGround) { p.vy = JUMP_VEL; p.jumpCount = 1; isOnGround = false; }
+          else if (p.jumpCount < MAX_JUMPS) { p.vy = JUMP_VEL * 0.93; p.jumpCount += 1; }
         }
         controls.current.jumpPressed = false;
-
-        // Integrate position with physics
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-
-        // Clamp world bounds
         if (p.x < 0) p.x = 0;
         if (p.x > GAME_WIDTH - PLAYER_W) p.x = GAME_WIDTH - PLAYER_W;
         if (p.y < 0) p.y = 0;
       }
-
-      // --- Robust fall death/platform snap ---
-      // If player falls below screen, DEATH
       if (p.y > GAME_HEIGHT + 36 && !levelComplete && !transitionTimer) {
         defeatPlayer();
         deathTimer = 1.0;
       }
-      // Land on ground (failsafe for bottom edge), only if not currently standing on any platform
       if (p.y + PLAYER_H >= GAME_HEIGHT && !levelComplete && !transitionTimer && !isOnGround) {
         p.y = GAME_HEIGHT - PLAYER_H;
         p.vy = 0;
         isOnGround = true;
       }
-
-      // --- Triple jump reset: landing (platform or ground) resets jump count ---
-      if (isOnGround) {
-        p.jumpCount = 0;
-      }
-
+      if (isOnGround) p.jumpCount = 0;
       p.onGround = isOnGround;
 
       // --- GEM pickup logic ---
@@ -351,22 +352,21 @@ function App() {
       let newGems = gems.map(gem =>
         gem.collected ? gem : (
           (rectsOverlap(p.x, p.y, PLAYER_W, PLAYER_H, gem.x - GEM_RADIUS, gem.y - GEM_RADIUS, GEM_RADIUS * 2, GEM_RADIUS * 2)) ?
-            (gCollectedNow = true, { ...gem, collected: true }) : gem
+          (gCollectedNow = true, { ...gem, collected: true }) : gem
         )
       );
       if (gCollectedNow) {
         let nCollected = newGems.filter(g => g.collected).length;
         setGems(newGems);
-        setHud(h => ({
-          ...h,
-          gems: nCollected
-        }));
+        setHud(h => ({ ...h, gems: nCollected }));
       }
 
-      // --- PENALTY/RESET on enemy collision (walk into enemy = lose life, reset level) ---
+      // --- Enemy collision with ANY enemy in array ---
       if (
         !levelComplete && !transitionTimer && !deathTimer &&
-        rectsOverlap(p.x, p.y, PLAYER_W, PLAYER_H, nextEnemy.x, nextEnemy.y, ENEMY_W, ENEMY_H)
+        nextEnemies.some(e =>
+          rectsOverlap(p.x, p.y, PLAYER_W, PLAYER_H, e.x, e.y, ENEMY_W, ENEMY_H)
+        )
       ) {
         penaltyFlash = 16;
         defeatPlayer();
@@ -393,7 +393,6 @@ function App() {
         return requestAnimationFrame(frame);
       }
 
-      // --- Death (lose life) ---
       if (deathTimer > 0) {
         penaltyFlash--;
         deathTimer -= dt;
@@ -469,27 +468,27 @@ function App() {
           ctx.restore();
         }
 
-        // Enemy (draw only first enemy if any)
-        ctx.save();
-        if (penaltyFlash > 0 && penaltyFlash % 2 === 0) {
-          ctx.globalAlpha = 0.4;
+        // Enemies: Draw each enemy
+        if (Array.isArray(nextEnemies) && nextEnemies.length > 0) {
+          for (let e of nextEnemies) {
+            ctx.save();
+            if (penaltyFlash > 0 && penaltyFlash % 2 === 0) ctx.globalAlpha = 0.4;
+            if (ctx._modernSlimeImg === undefined) {
+              ctx._modernSlimeImg = new window.Image();
+              ctx._modernSlimeImg.src = require("./assets/img/slime_modern.png");
+              ctx._modernSlimeImgLoaded = false;
+              ctx._modernSlimeImg.onload = () => { ctx._modernSlimeImgLoaded = true; };
+            }
+            if (ctx._modernSlimeImg && ctx._modernSlimeImg.complete && ctx._modernSlimeImg.naturalWidth > 0) {
+              ctx.drawImage(ctx._modernSlimeImg, e.x - cameraX, e.y - cameraY, ENEMY_W, ENEMY_H);
+            } else {
+              ctx.fillStyle = "#f47350";
+              ctx.fillRect(e.x - cameraX, e.y - cameraY, ENEMY_W, ENEMY_H);
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+          }
         }
-        if (ctx._modernSlimeImg === undefined) {
-          ctx._modernSlimeImg = new window.Image();
-          ctx._modernSlimeImg.src = require("./assets/img/slime_modern.png");
-          ctx._modernSlimeImgLoaded = false;
-          ctx._modernSlimeImg.onload = () => {
-            ctx._modernSlimeImgLoaded = true;
-          };
-        }
-        if (ctx._modernSlimeImg && ctx._modernSlimeImg.complete && ctx._modernSlimeImg.naturalWidth > 0) {
-          ctx.drawImage(ctx._modernSlimeImg, nextEnemy.x - cameraX, nextEnemy.y - cameraY, ENEMY_W, ENEMY_H);
-        } else {
-          ctx.fillStyle = "#f47350";
-          ctx.fillRect(nextEnemy.x - cameraX, nextEnemy.y - cameraY, ENEMY_W, ENEMY_H);
-        }
-        ctx.globalAlpha = 1;
-        ctx.restore();
 
         // Player
         ctx.save();
@@ -563,7 +562,7 @@ function App() {
       running = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curLevel, gems, lives, enemy, levelComplete, transitionTimer]);
+  }, [curLevel, gems, lives, enemies, levelComplete, transitionTimer]);
 
   // On mount: focus canvas for keyboard
   useEffect(() => {
