@@ -35,9 +35,17 @@ function circleRectOverlap(cx, cy, r, rx, ry, rw, rh) {
   return dx * dx + dy * dy <= r * r;
 }
 
-// --- PUBLIC_INTERFACE ---
+/**
+ * PUBLIC_INTERFACE
+ * App component for the platformer game.
+ * Implements game state transitions (MENU -> GAME -> WIN/LOSE), start menu, and main gameplay rendering.
+ */
 function App() {
   const canvasRef = useRef(null);
+
+  // --- Game state machine ---
+  // "MENU" = start menu, "GAME" = playing levels, "WIN" = all levels complete, "LOSE" = out of lives
+  const [gameState, setGameState] = useState("MENU");
 
   // --- Level state ---
   const [curLevel, setCurLevel] = useState(0);
@@ -82,6 +90,85 @@ function App() {
     jumpPressed: false,
     jump: false
   });
+
+  // --- Handle global keys for "Start Game"/restart from menu/win/lose screens ---
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (gameState === "MENU" && (e.key === "Enter" || e.key === " " || e.key === "Spacebar")) {
+        startGame();
+      }
+      if (gameState === "WIN" && (e.key === "r" || e.key === "R" || e.key === "Enter")) {
+        restartGame();
+      }
+      if (gameState === "LOSE" && (e.key === "r" || e.key === "R" || e.key === "Enter")) {
+        restartGame();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+    // eslint-disable-next-line
+  }, [gameState]);
+
+  // Handles clicking start game button
+  function startGame() {
+    setGameState("GAME");
+    setCurLevel(0);
+    setLives(3);
+    setHud({ gems: 0, lives: 3, msg: "", allGems: LEVELS[0].gems.length });
+    // Reset player, enemies, gems
+    player.current = {
+      x: LEVELS[0].playerStart?.x ?? 35,
+      y: LEVELS[0].playerStart?.y ?? 210,
+      vx: 0,
+      vy: 0,
+      onGround: false,
+      jumpCount: 0
+    };
+    setGems(LEVELS[0].gems.map(g => ({ ...g, collected: false })));
+    setEnemies(
+      LEVELS[0].enemies && LEVELS[0].enemies.length > 0
+        ? LEVELS[0].enemies.map(e => ({ ...e }))
+        : [{ x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }]
+    );
+    setLevelComplete(false);
+    setTransitionTimer(0);
+  }
+
+  // Handles game win (all levels complete)
+  function handleGameWin() {
+    setGameState("WIN");
+  }
+
+  // Handles game lose (out of lives)
+  function handleGameLose() {
+    setGameState("LOSE");
+  }
+
+  // Restart game from WIN/LOSE
+  function restartGame() {
+    setGameState("MENU");
+    setCurLevel(0);
+    setLives(3);
+    setHud({ gems: 0, lives: 3, msg: "", allGems: LEVELS[0].gems.length });
+    player.current = {
+      x: LEVELS[0].playerStart?.x ?? 35,
+      y: LEVELS[0].playerStart?.y ?? 210,
+      vx: 0,
+      vy: 0,
+      onGround: false,
+      jumpCount: 0
+    };
+    setGems(LEVELS[0].gems.map(g => ({ ...g, collected: false })));
+    setEnemies(
+      LEVELS[0].enemies && LEVELS[0].enemies.length > 0
+        ? LEVELS[0].enemies.map(e => ({ ...e }))
+        : [{ x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }]
+    );
+    setLevelComplete(false);
+    setTransitionTimer(0);
+  }
 
   // --- Handle keyboard events ---
   useEffect(() => {
@@ -138,32 +225,10 @@ function App() {
   function startNextLevel() {
     let nextIdx = curLevel + 1;
     if (nextIdx >= LEVELS.length) {
-      // All levels complete
-      setHud(h => ({
-        ...h,
-        msg: "Game complete! Press R to restart.",
-        gems: 0
-      }));
-      setCurLevel(0);
-      setLives(3);
-      player.current = {
-        x: LEVELS[0].playerStart?.x ?? 35,
-        y: LEVELS[0].playerStart?.y ?? 210,
-        vx: 0,
-        vy: 0,
-        onGround: false
-      };
-      setGems(LEVELS[0].gems.map(g => ({ ...g, collected: false })));
-      setEnemies(
-        LEVELS[0].enemies && LEVELS[0].enemies.length > 0
-          ? LEVELS[0].enemies.map(e => ({ ...e }))
-          : [{ x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }]
-      );
-      setLevelComplete(false);
-      setTransitionTimer(0);
+      // All levels complete. Switch to WIN state.
+      handleGameWin();
       return;
     }
-
     setCurLevel(nextIdx);
     setHud(h => ({
       ...h,
@@ -404,11 +469,8 @@ function App() {
             setHud({ ...h, msg: "Ouch! Life lost.", gems: 0 });
             restartLevel();
           } else {
-            setHud({ ...h, msg: "Game over! Press R to restart.", gems: 0 });
-            setLevelComplete(false);
-            setTransitionTimer(0);
-            setCurLevel(0);
-            setLives(3);
+            // All lives lost: switch to LOSE state (game over)
+            handleGameLose();
           }
           return;
         }
@@ -569,7 +631,124 @@ function App() {
     if (canvasRef.current) canvasRef.current.focus();
   }, [curLevel]);
 
-  // Style for fullscreen game
+  // Style for fullscreen game and start/menu/game over screens
+  if (gameState === "MENU") {
+    // --- START MENU ---
+    return (
+      <div
+        className="App"
+        style={{
+          minHeight: "100vh",
+          background: "var(--px-bg, #181824)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
+      >
+        <div className="main-menu px-window px-effect">
+          <h1 className="px-title">NIMBLE QUEST</h1>
+          <div style={{fontSize: "1.05rem", color:"#ffd700", fontFamily:"'Press Start 2P', monospace", marginBottom: 22, marginTop: 10}}>
+            2D Platformer
+          </div>
+          <div style={{color:"#e87a41", marginBottom:14, fontFamily:"'Press Start 2P', monospace", fontSize:"0.88rem"}}>
+            Guide your hero through challenging retro worlds,<br/>
+            collect gems, and avoid danger!
+          </div>
+          <button
+            className="px-btn px-btn-large"
+            style={{ marginTop: 30, minWidth:140, fontSize:"1.17rem"}}
+            onClick={startGame}
+            autoFocus
+          >
+            Start Game
+          </button>
+          <div style={{marginTop:20, color:"#ffd6a3",fontSize:"0.92rem"}}>
+            Controls: <b>← →</b> (A/D) move &nbsp; <b>Space/W/↑</b> jump
+            <br/>
+            Press <b>Enter</b> or <b>Space</b> to start
+          </div>
+          <div style={{
+            marginTop:28, fontFamily:"monospace",
+            fontSize:"0.79rem", color:"#aaa", opacity:.63
+          }}>
+            Pixel-art demo for KAVIA / Use keyboard to play.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (gameState === "WIN") {
+    // --- WIN SCREEN ---
+    return (
+      <div
+        className="App"
+        style={{
+          minHeight: "100vh",
+          background: "var(--px-bg, #181824)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
+      >
+        <div className="main-menu px-window px-effect" style={{maxWidth: 440}}>
+          <h2 className="px-title">You Win!</h2>
+          <div style={{marginBottom:16, fontSize:"1.2rem", color:"#ffd700"}}>
+            Congratulations, all levels complete!
+          </div>
+          <div style={{marginBottom:8, fontSize:"1rem", color:"#85c1e9"}}>
+            Thanks for playing Nimble Quest.
+          </div>
+          <button
+            className="px-btn px-btn-large"
+            style={{marginTop:22}}
+            onClick={restartGame}
+            autoFocus
+          >Play Again</button>
+          <div style={{marginTop:19, color:"#ffd6a3", fontSize:13}}>
+            Press <b>R</b> or <b>Enter</b> to restart
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (gameState === "LOSE") {
+    // --- GAME OVER SCREEN ---
+    return (
+      <div
+        className="App"
+        style={{
+          minHeight: "100vh",
+          background: "var(--px-bg, #181824)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center"
+        }}
+      >
+        <div className="main-menu px-window px-effect" style={{maxWidth: 440}}>
+          <h2 className="px-title" style={{color:"#ff7e78"}}>Game Over</h2>
+          <div style={{marginBottom:12, fontSize:"1.09rem", color:"#ffd700"}}>
+            All lives lost. Try again for a higher score!
+          </div>
+          <button
+            className="px-btn px-btn-large"
+            style={{marginTop:22}}
+            onClick={restartGame}
+            autoFocus
+          >Play Again</button>
+          <div style={{marginTop:16, color:"#ffd6a3", fontSize:13}}>
+            Press <b>R</b> or <b>Enter</b> to restart
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- GAMEPLAY UI: Only show when in GAME state ---
   return (
     <div
       className="App"
