@@ -231,17 +231,24 @@ const GameEngine = ({
 
     // Draw enemies
     // Enemies should have per-type animation and visuals
+    // cache loaded image outside loop
+    if (!ctx._modernSlimeImg) {
+      ctx._modernSlimeImg = new window.Image();
+      ctx._modernSlimeImg.src = require("../assets/img/slime_modern.png");
+      ctx._modernSlimeImgLoaded = false;
+      ctx._modernSlimeImg.onload = () => { ctx._modernSlimeImgLoaded = true; };
+    }
     enemyState.forEach(en => {
       ctx.save();
       if (en.type === "walker") {
-        ctx.fillStyle = "#f47350";
-        ctx.fillRect(en.x, en.y, 14, 12);
-        // classic horizontal-eyed "slime"
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(en.x+3, en.y+4, 3, 2);
-        ctx.fillRect(en.x+8, en.y+4, 3, 2);
-        ctx.strokeStyle = "#fff";
-        ctx.strokeRect(en.x, en.y, 14, 12);
+        // Modern pixel-art slime
+        if (ctx._modernSlimeImg && ctx._modernSlimeImg.complete && ctx._modernSlimeImg.naturalWidth > 0) {
+          ctx.drawImage(ctx._modernSlimeImg, en.x, en.y, 14, 12);
+        } else {
+          // fallback: colored rectangle while image loads
+          ctx.fillStyle = "#f47350";
+          ctx.fillRect(en.x, en.y, 14, 12);
+        }
       } else if (en.type === "hopper") {
         ctx.fillStyle = "#53b0ef";
         ctx.fillRect(en.x, en.y, 12, 13);
