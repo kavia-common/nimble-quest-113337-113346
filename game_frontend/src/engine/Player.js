@@ -58,7 +58,7 @@ export default class Player {
    * @param {function} collisionTester - receives (x, y, w, h) returning collision type/bool.
    */
   update(dt, controls, collisionTester) {
-    // Sideways
+    // Sideways movement - only change horizontal velocity
     if (controls.left) {
       this.vx = -MOVE_SPEED;
       this.facing = -1;
@@ -69,49 +69,95 @@ export default class Player {
       this.vx = 0;
     }
 
-    // Jumping (if on ground or double-jump available)
-    if (controls.jumpPressed) {
-      if (this.onGround) {
-        this.vy = JUMP_VELOCITY;
-        this.onGround = false;
-        this.hasDoubleJumped = false;
-      } else if (!this.hasDoubleJumped) {
-        this.vy = JUMP_VELOCITY * 0.92; // Slightly weaker double jump
-        this.hasDoubleJumped = true;
-      }
-      // else: no jump.
-    }
+    // Vertical collision/standing state must be reset each frame
+    let wantJump = controls.jumpPressed;
+    let landed = false;
 
-    // Dashing (stub)
+    // Dashing
     if (controls.dashPressed && this.dashAvailable) {
       this.vx = this.facing * DASH_VELOCITY;
       this.dashAvailable = false;
-      // TODO: Complete dash logic (distance/timer, invincibility frames etc.)
     }
 
     // Apply gravity
     this.vy += GRAVITY * dt;
 
-    // Motion
+    // Predict next position for X and Y separately for AABB collision
     let nextX = this.x + this.vx * dt;
     let nextY = this.y + this.vy * dt;
 
-    // Ground collision (temporary: world ground, later via Physics)
-    if (nextY + PLAYER_HEIGHT >= GROUND_Y) {
-      nextY = GROUND_Y - PLAYER_HEIGHT;
-      this.vy = 0;
-      this.onGround = true;
-      this.dashAvailable = true; // reset dash when grounded
-      this.hasDoubleJumped = false;
+    // --- Horizontal collision: allow sliding along platforms ---
+    if (collisionTester && collisionTester(nextX, this.y, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+      // Try moving one pixel at a time towards obstacle for pixel-perfect stop
+      let step = (this.vx > 0) ? 1 : -1;
+      for (let i = 0; i < Math.abs(nextX - this.x); i++) {
+        if (!collisionTester(this.x + step, this.y, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+          this.x += step;
+        } else {
+          break;
+        }
+      }
+      this.vx = 0;
+      nextX = this.x;
     } else {
-      this.onGround = false;
+      this.x = nextX;
     }
 
-    // Future: test platform collisions, wall, ceiling
-    // if (collisionTester) ...
+    // --- Vertical collision: hit floor/platform from above (standing), or ceiling from below (head bump) ---
+    let falling = this.vy > 0;
+    if (collisionTester) {
+      // Try moving one pixel at a time in Y
+      let yStep = falling ? 1 : -1;
+      let deltaY = nextY - this.y;
+      let maxSteps = Math.abs(Math.round(deltaY));
+      let didCollide = false;
+      for (let i = 0; i < maxSteps; i++) {
+        let testY = this.y + yStep;
+        if (!collisionTester(this.x, testY, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+          this.y = testY;
+        } else {
+          didCollide = true;
+          break;
+        }
+      }
+      if (!didCollide) {
+        this.y = nextY;
+      }
+      // Floor/platform from above (standing)
+      if (falling && collisionTester(this.x, this.y + 1, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+        this.vy = 0;
+        this.onGround = true;
+        this.dashAvailable = true;
+        this.hasDoubleJumped = false;
+        landed = true;
+      } else if (!falling && collisionTester(this.x, this.y - 1, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+        // Hitting head
+        this.vy = 0;
+      } else {
+        this.onGround = false;
+      }
+    } else {
+      this.y = nextY;
+    }
 
-    this.x = nextX;
-    this.y = nextY;
+    // Jumping (if on ground or double-jump available)
+    if (wantJump) {
+      if (this.onGround && landed) {
+        this.vy = JUMP_VELOCITY;
+        this.onGround = false;
+        this.hasDoubleJumped = false;
+      } else if (!this.hasDoubleJumped) {
+        this.vy = JUMP_VELOCITY * 0.92;
+        this.hasDoubleJumped = true;
+      }
+    }
+
+    // Clamp to left/right of screen
+    if (this.x < 0) this.x = 0;
+    if (this.x > 320 - PLAYER_WIDTH) this.x = 320 - PLAYER_WIDTH;
+    // Clamp to top/bottom
+    if (this.y < 0) this.y = 0;
+    if (this.y > GROUND_Y - PLAYER_HEIGHT) this.y = GROUND_Y - PLAYER_HEIGHT;
   }
 
   // PUBLIC_INTERFACE

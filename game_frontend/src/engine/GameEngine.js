@@ -163,11 +163,12 @@ const GameEngine = ({
     let foundGem = false;
     const px = player.x + 3, py = player.y + 7;
 
-    // Collect gems if touching (small radius for precision)
+    // Collect gems if player bounding box center overlaps with gem (radius hitbox)
     gemsArr.forEach((gem, i) => {
-      if (!gem.collected &&
-          Math.abs(px - gem.x) < 10 &&
-          Math.abs(py - gem.y) < 12) {
+      if (
+        !gem.collected &&
+        Math.hypot((player.x + 0.5 * 12) - gem.x, (player.y + 0.5 * 14) - gem.y) < 12
+      ) {
         gem.collected = true;
         foundGem = true;
         setGems(gemsArr.slice());
