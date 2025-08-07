@@ -292,25 +292,19 @@ const GameEngine = ({
     });
 
     // Draw enemies
-    // Enemies should have per-type animation and visuals
-    // cache loaded image outside loop
-    if (!ctx._modernSlimeImg) {
-      ctx._modernSlimeImg = new window.Image();
-      ctx._modernSlimeImg.src = require("../assets/img/slime_modern.png");
-      ctx._modernSlimeImgLoaded = false;
-      ctx._modernSlimeImg.onload = () => { ctx._modernSlimeImgLoaded = true; };
-    }
+    // All enemies use colored rectangles or shapes (no images)
     enemyState.forEach(en => {
       ctx.save();
       if (en.type === "walker") {
-        // Modern pixel-art slime
-        if (ctx._modernSlimeImg && ctx._modernSlimeImg.complete && ctx._modernSlimeImg.naturalWidth > 0) {
-          ctx.drawImage(ctx._modernSlimeImg, en.x, en.y, 14, 12);
-        } else {
-          // fallback: colored rectangle while image loads
-          ctx.fillStyle = "#f47350";
-          ctx.fillRect(en.x, en.y, 14, 12);
-        }
+        // Fallback: colored rectangle for "slime"
+        ctx.fillStyle = "#f47350";
+        ctx.fillRect(en.x, en.y, 14, 12);
+        // Simple face/eyes for more "slime" character
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(en.x + 3, en.y + 4, 2, 2);
+        ctx.fillRect(en.x + 9, en.y + 4, 2, 2);
+        ctx.fillStyle = "#000";
+        ctx.fillRect(en.x + 4, en.y + 8, 6, 1);
       } else if (en.type === "hopper") {
         ctx.fillStyle = "#53b0ef";
         ctx.fillRect(en.x, en.y, 12, 13);
