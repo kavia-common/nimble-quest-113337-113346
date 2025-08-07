@@ -47,10 +47,30 @@ function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
   );
 }
 
-// PUBLIC_INTERFACE
-const GameEngine = () => {
+/**
+ * GameEngine - Main orchestrator for multi-level loop, rendering, and simulation.
+ * Props:
+ *   - lives, score, gems, maxGems, level: Top-level persistent values (display only)
+ *   - onGameStateUpdate({score, lives, gems, maxGems, level}): callback when any state value changes
+ *   - onGameOver(), onNextLevel({levelName}), onAllLevelsComplete()
+ *   - gameFlowOverlay: parent-controlled overlay for game over/level complete, disables gameplay if set
+ *   - onDismissOverlay: handler to clear overlay
+ */
+const GameEngine = ({
+  lives = 3,
+  score = 0,
+  gems = 0,
+  maxGems = 0,
+  level = 0,
+  onGameStateUpdate,
+  onGameOver,
+  onNextLevel,
+  onAllLevelsComplete,
+  gameFlowOverlay,
+  onDismissOverlay
+}) => {
   const canvasRef = useRef();
-  const [levelIdx, setLevelIdx] = useState(0);
+  const [levelIdx, setLevelIdx] = useState(level || 0);
   const [levelState, setLevelState] = useState({
     gems: [],
     completed: false,
@@ -59,13 +79,18 @@ const GameEngine = () => {
   });
   const [forceRerender, setForceRerender] = useState(0); // used to trigger UI rerender on some state changes
 
-  // playerRef must be reset per level
+  // Player state: persists for lives/score
   const playerRef = useRef(new Player({ x: 16, y: 120 }));
 
-  // re-init state when level changes
+  // Top-level persistent counters per run
+  const [pLives, setPLives] = useState(lives);
+  const [pScore, setPScore] = useState(score);
+  const [pGems, setPGems] = useState(gems);
+  const [pMaxGems, setPMaxGems] = useState(maxGems);
+
+  // On level change: reset local state, set maxGems, but keep persistent values
   useEffect(() => {
     if (LEVELS[levelIdx]) {
-      // Deep copy gems to allow collection state
       const gemCopies = LEVELS[levelIdx].gems.map(g => ({ ...g, collected: false }));
       setLevelState({
         gems: gemCopies,
@@ -73,9 +98,20 @@ const GameEngine = () => {
         transitioning: false,
         message: ''
       });
+      setPMaxGems(LEVELS[levelIdx].gems.length);
       // Reset player
       playerRef.current = new Player({ x: 16, y: 120 });
     }
+    // Report to top-level that level index changed (with persisted counters)
+    if (onGameStateUpdate)
+      onGameStateUpdate({
+        score: pScore,
+        lives: pLives,
+        gems: 0,
+        maxGems: LEVELS[levelIdx]?.gems.length ?? 0,
+        level: levelIdx
+      });
+    // eslint-disable-next-line
   }, [levelIdx]);
 
   // Controls
@@ -122,25 +158,39 @@ const GameEngine = () => {
     };
   }, []);
 
-  // Checks for gem collection and exit
-  function processLevelLogic(player, curLevel, gems, setGems, onLevelComplete, updateCount) {
+  // Checks for gem collection and exit, and returns relevant event triggers.
+  function processLevelLogic(player, curLevel, gemsArr, setGems, onLevelComplete, updateCount) {
     let foundGem = false;
     const px = player.x + 3, py = player.y + 7;
 
     // Collect gems if touching (small radius for precision)
-    gems.forEach((gem, i) => {
+    gemsArr.forEach((gem, i) => {
       if (!gem.collected &&
           Math.abs(px - gem.x) < 10 &&
           Math.abs(py - gem.y) < 12) {
         gem.collected = true;
         foundGem = true;
-        setGems(gems.slice());
+        setGems(gemsArr.slice());
         setForceRerender(n => n+1); // force react update (primitive state)
+        // Update counters up the chain
+        setPGems(prev => {
+          const newVal = prev + 1;
+          if (onGameStateUpdate)
+            onGameStateUpdate({ score: pScore, lives: pLives, gems: newVal, maxGems: pMaxGems, level: levelIdx });
+          return newVal;
+        });
+        setPScore(prevS => {
+          // +250 for gem
+          const nextS = prevS + 250;
+          if (onGameStateUpdate)
+            onGameStateUpdate({ score: nextS, lives: pLives, gems: pGems+1, maxGems: pMaxGems, level: levelIdx });
+          return nextS;
+        });
       }
     });
 
     // All gems collected + player at exit -> beat level
-    if (gems.every(g => g.collected)) {
+    if (gemsArr.every(g => g.collected)) {
       // Exit detection
       if (
         rectsOverlap(
@@ -275,11 +325,27 @@ const GameEngine = () => {
       setLevelState(ls => ({
         ...ls,
         transitioning: true,
-        message: "Defeated! Restarting level..."
+        message: pLives > 1
+          ? "Defeated! Life lost..."
+          : "Defeated! Final life..."
       }));
+      setPLives(l => {
+        const nextLives = Math.max(0, l - 1);
+        if (onGameStateUpdate)
+          onGameStateUpdate({ score: pScore, lives: nextLives, gems: pGems, maxGems: pMaxGems, level: levelIdx });
+        return nextLives;
+      });
       defeatTimeoutHandle = setTimeout(() => {
-        setLevelIdx(idx => idx);
-      }, 1600);
+        // End game if out of lives, else replay level
+        if (pLives - 1 <= 0) {
+          if (onGameOver) onGameOver();
+        } else {
+          // Restart level, maintain updated lives
+          setLevelIdx(idx => idx);
+          setPScore(prevS => prevS); // score persists
+          setPGems(0); // reset collected for level
+        }
+      }, 1700);
     }
 
     function frame() {
@@ -416,20 +482,27 @@ const GameEngine = () => {
         levelState.gems,
         (newGems) => setLevelState(ls => ({ ...ls, gems: newGems })),
         () => {
-          // Level complete!
+          // Level complete, score bonus
+          setPScore(prevS => {
+            const nextS = prevS + 1000;
+            if (onGameStateUpdate)
+              onGameStateUpdate({ score: nextS, lives: pLives, gems: pGems, maxGems: pMaxGems, level: levelIdx });
+            return nextS;
+          });
           setLevelState(ls => ({ ...ls, completed: true, transitioning: true, message: 'Level Complete!' }));
+          if (onNextLevel && levelIdx + 1 < LEVELS.length) {
+            onNextLevel({ levelName: LEVELS[levelIdx + 1].name });
+          } else if (onAllLevelsComplete && levelIdx + 1 >= LEVELS.length) {
+            onAllLevelsComplete();
+          }
+          // Delay actual transition, overlay is handled externally
           setTimeout(() => {
             if (levelIdx + 1 < LEVELS.length) {
+              setPLives(l => l); // carry lives
               setLevelIdx(levelIdx + 1);
-            } else {
-              setLevelState({
-                ...levelState,
-                completed: true,
-                transitioning: true,
-                message: "All Levels Complete! 🎉"
-              });
+              setPGems(0); // new level, reset gems
             }
-          }, 1800);
+          }, 1900);
         },
         setForceRerender
       );
@@ -516,9 +589,9 @@ const GameEngine = () => {
     if (canvasRef.current?.getCanvas) canvasRef.current.getCanvas().focus();
   }, [levelIdx]);
 
-  // Restart level logic (future: loss/fail or player-requested)
+  // Restart level logic
   const restartLevel = () => {
-    setLevelIdx(lidx => lidx);
+    if (!gameFlowOverlay) setLevelIdx(lidx => lidx);
   };
 
   // Render main engine UI + level transition info
@@ -554,7 +627,7 @@ const GameEngine = () => {
           </div>
         }
       </div>
-      {levelState.transitioning && (
+      {levelState.transitioning && !gameFlowOverlay && (
         <div style={{
           position: 'absolute',
           top: 65, left: '50%',
@@ -578,6 +651,7 @@ const GameEngine = () => {
           className="px-btn"
           style={{ fontSize: "1rem", marginTop: 4, padding: "2px 25px" }}
           onClick={restartLevel}
+          disabled={!!gameFlowOverlay}
         >
           Restart Level
         </button>
