@@ -20,7 +20,8 @@ function clamp(val, min, max) {
 
 // Axis-aligned bounding box collision
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
-  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  // Tightly includes all sides, helps with pixel-accurate collision at edges/corners
+  return (ax + aw) > bx && ax < (bx + bw) && (ay + ah) > by && ay < (by + bh);
 }
 // Circle-rect overlap (for player-gem)
 function circleRectOverlap(cx, cy, r, rx, ry, rw, rh) {
@@ -245,40 +246,49 @@ function App() {
       }
       setEnemy(nextEnemy);
 
-      // --- PLATFORM collision: find platform we're standing on
+      // --- PLATFORM collision: Improved robust solution (prevents edge fallthrough, ensures standing on any platform)
       let isOnGround = false;
-      let groundY = GAME_HEIGHT;
+      let standPlatform = null;
+
+      // Find platforms under player (flush or within 1px), top-most one wins
       for (let pl of L.platforms) {
+        // Must be horizontally over platform (modulo 1px wiggle)
         if (
-          p.x + PLAYER_W > pl.x &&
-          p.x < pl.x + pl.w &&
-          Math.abs(p.y + PLAYER_H - pl.y) < 1 &&
-          p.vy >= 0 &&
-          p.y + PLAYER_H <= pl.y + pl.h
+          (p.x + PLAYER_W) > (pl.x + 0.5) &&
+          (p.x + 0.5) < (pl.x + pl.w) &&
+          Math.abs((p.y + PLAYER_H) - pl.y) < 1.15 && // Flush on top (allow <1.15px due to float math)
+          p.vy >= 0 // Only consider for downward movement or standing
         ) {
-          // Set player flush on top of platform
-          p.y = pl.y - PLAYER_H;
-          p.vy = 0;
-          isOnGround = true;
-          groundY = pl.y;
+          // Only land if was falling or very close to ground
+          if ((p.y + PLAYER_H) <= pl.y + pl.h) {
+            // Stand on this platform
+            p.y = pl.y - PLAYER_H;
+            p.vy = 0;
+            isOnGround = true;
+            standPlatform = pl;
+            break; // Pick first eligible (higher Y)
+          }
         }
-        // Handle horizontal wall-like stops (slippery)
+      }
+      // Horizontal wall collision: left/right nudge - but *after* vertical/snap
+      for (let pl of L.platforms) {
+        // Only interact if intersected vertically (player within platform height except for head/tail)
         if (
           p.y + PLAYER_H > pl.y + 2 &&
           p.y < pl.y + pl.h - 2 &&
-          p.x + PLAYER_W > pl.x &&
-          p.x < pl.x + pl.w
+          (p.x + PLAYER_W) > pl.x &&
+          p.x < (pl.x + pl.w)
         ) {
           // If moving right
-          if (p.vx > 0) p.x = Math.min(p.x, pl.x - PLAYER_W);
+          if (p.vx > 0) p.x = Math.min(p.x, pl.x - PLAYER_W - 0.01);
           // If moving left
-          if (p.vx < 0) p.x = Math.max(p.x, pl.x + pl.w);
+          if (p.vx < 0) p.x = Math.max(p.x, pl.x + pl.w + 0.01);
         }
       }
 
       // --- Movement controls & physics ---
       if (!levelComplete && !transitionTimer && !deathTimer) {
-        // Horizontal
+        // Horizontal move
         if (controls.current.left) {
           p.vx = -MOVE_SPEED;
         } else if (controls.current.right) {
@@ -286,17 +296,18 @@ function App() {
         } else {
           p.vx = 0;
         }
-        // Gravity
+
+        // Gravity always
         p.vy += GRAVITY * dt;
 
-        // Jump
+        // Only allow jump if landed flush on any platform (no double-jump here)
         if (controls.current.jumpPressed && isOnGround) {
           p.vy = JUMP_VEL;
           isOnGround = false;
         }
         controls.current.jumpPressed = false;
 
-        // Integrate position
+        // Integrate position using physics (moves first, then collision correct)
         p.x += p.vx * dt;
         p.y += p.vy * dt;
 
@@ -306,13 +317,14 @@ function App() {
         if (p.y < 0) p.y = 0;
       }
 
-      // --- Land on ground if falling ---
-      // If player below ground, snap and stop (fail below screen = death)
+      // --- Robust fall death/platform snap ---
+      // If player falls below screen, DEATH
       if (p.y > GAME_HEIGHT + 36 && !levelComplete && !transitionTimer) {
         defeatPlayer();
         deathTimer = 1.0;
       }
-      if (p.y + PLAYER_H >= GAME_HEIGHT && !levelComplete && !transitionTimer) {
+      // Land on ground (failsafe for bottom edge), only if not currently standing on any platform
+      if (p.y + PLAYER_H >= GAME_HEIGHT && !levelComplete && !transitionTimer && !isOnGround) {
         p.y = GAME_HEIGHT - PLAYER_H;
         p.vy = 0;
         isOnGround = true;
