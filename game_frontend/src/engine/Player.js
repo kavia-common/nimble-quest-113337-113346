@@ -1,5 +1,5 @@
 //
-// Player.js - Overhauled: Robust retro platformer player physics, AABB collision, and debug overlays.
+// Player.js - Refined: Robust pixel-perfect retro platformer physics, collision, and debug visualization.
 //
 /*
   Responsibilities:
@@ -10,7 +10,6 @@
     - Debug: Bounding box render & collision console diagnostics
 */
 
-// Dimensions and constants
 const PLAYER_WIDTH = 12;
 const PLAYER_HEIGHT = 14;
 const MOVE_SPEED = 90;
@@ -26,7 +25,7 @@ export default class Player {
    * @param {object} opts - Player initialization options (x, y).
    */
   constructor(opts = {}) {
-    // Position: left / top of bounding box (pixel units)
+    // Position: left/top of bounding box (pixel units)
     this.x = opts.x ?? 150;
     this.y = opts.y ?? (GAME_HEIGHT - 40 - PLAYER_HEIGHT);
     this.vx = 0;
@@ -42,40 +41,45 @@ export default class Player {
 
   // PUBLIC_INTERFACE
   /**
-   * Draws the player as a simple pixel-art rectangle/sprite, with bbox and state overlay in debug mode.
+   * Draw the player, bounding box, ground contact marker, and debug overlays for collision.
    * @param {CanvasRenderingContext2D} ctx
    */
   draw(ctx) {
     ctx.save();
+    // Player main body
     ctx.fillStyle = '#ffd700';
     ctx.fillRect(this.x, this.y, PLAYER_WIDTH, PLAYER_HEIGHT);
-    // Shadow under feet
+
+    // (Retro) shadow underneath
     ctx.globalAlpha = 0.18;
     ctx.fillStyle = '#222';
     ctx.fillRect(this.x + 1, this.y + PLAYER_HEIGHT, PLAYER_WIDTH - 2, 3);
     ctx.globalAlpha = 1;
 
-    // Debug: draw bounding box and ground contact marker
-    // Toggle debug drawing -- set to true to show collision overlays
-    const showDebug = true;
-    if (showDebug) {
-      // Bounding box
+    // --- Debug overlays ---
+    const debug = true;
+    if (debug) {
+      // (1) Player AABB (green=grounded, red=air)
       ctx.save();
-      ctx.strokeStyle = this.onGround ? "#2ecc71" : "#ff5555";
-      ctx.lineWidth = 1.3;
+      ctx.strokeStyle = this.onGround ? '#27e827' : '#ff5555';
+      ctx.lineWidth = 1.2;
       ctx.setLineDash([2, 2]);
       ctx.strokeRect(this.x, this.y, PLAYER_WIDTH, PLAYER_HEIGHT);
-      // Draw bottom-center dot
+      ctx.restore();
+
+      // (2) Bottom-center ground contact dot
+      ctx.save();
       ctx.beginPath();
-      ctx.arc(this.x + PLAYER_WIDTH / 2, this.y + PLAYER_HEIGHT, 2, 0, 2 * Math.PI);
-      ctx.fillStyle = this.onGround ? "#ccf" : "#ccc";
+      ctx.arc(this.x + PLAYER_WIDTH / 2, this.y + PLAYER_HEIGHT - 1, 2, 0, Math.PI * 2);
+      ctx.fillStyle = this.onGround ? '#00eaff' : '#ffc';
+      ctx.globalAlpha = this.onGround ? 1 : 0.48;
       ctx.fill();
       ctx.restore();
 
-      // If platform collision last frame, show it
+      // (3) Highlight flush collision platform, if any
       if (this._debugLastCollidePlatform) {
         ctx.save();
-        ctx.globalAlpha = 0.35;
+        ctx.globalAlpha = 0.26;
         ctx.fillStyle = "#28d6fa";
         const pl = this._debugLastCollidePlatform;
         ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
@@ -88,16 +92,15 @@ export default class Player {
 
   // PUBLIC_INTERFACE
   /**
-   * Physics and control integration. Handles ground/platform AABB collision with pixel-perfect resolution.
+   * Integrate player movement, flush snap, ground state, and jump/collision handling with strict AABB guarantees.
    * @param {number} dt - Delta time (seconds)
    * @param {object} controls - { left, right, jumpPressed, dashPressed }
-   * @param {function} collisionTester - receives (x, y, w, h) => boolean (true if colliding)
-   *        Must check against all platforms, not just ground!
+   * @param {function} collisionTester - function (x, y, w, h) => boolean
    */
   update(dt, controls, collisionTester) {
     this.wasOnGround = this.onGround;
 
-    // 1. Horizontal movement and facing
+    // --- 1. Handle horizontal movement & facing
     if (controls.left) {
       this.vx = -MOVE_SPEED;
       this.facing = -1;
@@ -108,114 +111,95 @@ export default class Player {
       this.vx = 0;
     }
 
-    // 2. Dashing (one tap - cancels midair friction)
+    // --- 2. Dashing (single-shot, disables until next ground contact)
     if (controls.dashPressed && this.dashAvailable) {
       this.vx = this.facing * DASH_VELOCITY;
       this.dashAvailable = false;
     }
 
-    // 3. Gravity
+    // --- 3. Apply gravity
     this.vy += GRAVITY * dt;
 
-    // 4. Desired next position (but clamp and resolve separately)
+    // --- 4. Compute proposed positions
     let nextX = this.x + this.vx * dt;
     let nextY = this.y + this.vy * dt;
 
-    // 5. Horizontal collision: platforms
-    let xResolved = false;
-    let origY = this.y;
-    // Check moving in x, test at increments to prevent tunneling
+    // --- 5. Horizontal AABB collision
+    // Move X with fine-grained step for pixel-perfect stop at obstacles
+    let movedX = false;
     {
-      let testX = nextX;
-      let collided = false;
-      if (collisionTester && collisionTester(testX, origY, PLAYER_WIDTH, PLAYER_HEIGHT)) {
-        // Binary search back to open space (iteration for pixel snap)
-        let min = this.x, max = testX, last = this.x;
-        for (let steps = 0; steps < Math.abs(testX - this.x); steps++) {
-          let mid = min + Math.sign(max - min) * 1;
-          if (!collisionTester(mid, origY, PLAYER_WIDTH, PLAYER_HEIGHT)) {
-            last = mid;
-            min = mid;
-          } else {
-            max = mid;
-          }
-          if (Math.abs(max - min) < 1) break;
+      let origX = this.x;
+      let desiredX = nextX;
+      let step = Math.sign(desiredX - origX);
+      while (Math.abs(desiredX - this.x) > 0.8) {
+        let testX = this.x + step;
+        if (collisionTester && collisionTester(testX, this.y, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+          this.vx = 0;
+          break;
+        } else {
+          this.x = testX;
+          movedX = true;
         }
-        this.x = last;
-        this.vx = 0;
-        xResolved = true;
-      } else {
-        this.x = testX;
+        if (Math.abs(desiredX - this.x) < 0.8) break;
       }
+      // If no step required, allow subpixel
+      if (!movedX && !collisionTester(desiredX, this.y, PLAYER_WIDTH, PLAYER_HEIGHT))
+        this.x = desiredX;
     }
 
-    // 6. Vertical collision: platforms/floor/ceiling
-    let yResolved = false;
-    let origX = this.x;
+    // --- 6. Vertical AABB collision & flush ground/floor snap
     this._debugLastCollidePlatform = null;
     {
-      let testY = nextY, direction = (this.vy >= 0) ? 1 : -1;
-      let collided = false;
-      // Scan through the motion incrementally for pixel snapping
-      let dy = testY - this.y;
-      let steps = Math.abs(Math.round(dy));
-      let lastGood = this.y;
-      for (let s = 0; s < steps; s++) {
-        let testPosY = this.y + direction;
-        if (!collisionTester(origX, testPosY, PLAYER_WIDTH, PLAYER_HEIGHT)) {
-          this.y = testPosY;
-          lastGood = this.y;
-        } else {
-          collided = true;
-          break;
-        }
-      }
-      if (collided) {
-        this.y = lastGood;
-        yResolved = true;
-        this.vy = 0;
-      } else {
-        this.y = testY;
-      }
-    }
-
-    // 7. Are we on ground/platform? (Strict: bbox flush atop any platform or floor)
-    let onTop = false;
-    if (collisionTester) {
-      // If moving/falling downwards AND a collision just one pixel below
-      if (this.vy >= 0) {
-        // Test bounding box just 1 pixel below
-        if (collisionTester(this.x, this.y + 1, PLAYER_WIDTH, PLAYER_HEIGHT)) {
-          // We are flush on ground/platform
-          this.y = Math.floor(this.y);
+      let origY = this.y;
+      let desiredY = nextY;
+      let step = Math.sign(desiredY - origY);
+      while (Math.abs(desiredY - this.y) > 0.8) {
+        let testY = this.y + step;
+        if (collisionTester && collisionTester(this.x, testY, PLAYER_WIDTH, PLAYER_HEIGHT)) {
           this.vy = 0;
-          onTop = true;
-          this.dashAvailable = true;
-          this.hasDoubleJumped = false;
+          break;
+        } else {
+          this.y = testY;
         }
+        if (Math.abs(desiredY - this.y) < 0.8) break;
+      }
+      // Try subpixel if still not colliding
+      if (!collisionTester(this.x, desiredY, PLAYER_WIDTH, PLAYER_HEIGHT))
+        this.y = desiredY;
+    }
+
+    // --- 7. Ground/Floor flush check: are we standing strictly ON TOP of platform?
+    let flushGrounded = false;
+    if (collisionTester) {
+      // Look for surface exactly below (1 px)
+      if (this.vy >= 0 && collisionTester(this.x, this.y + 1, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+        this.y = Math.round(this.y); // Snap flush
+        this.vy = 0;
+        flushGrounded = true;
+        this.dashAvailable = true;
+        this.hasDoubleJumped = false;
       }
     }
-    this.onGround = onTop;
+    this.onGround = flushGrounded;
 
-    // 8. Jumping: strictly only when flush on ground/platform/top
+    // --- 8. Jumping: Only allowed on ground, or (optionally) one midair double-jump
     if (controls.jumpPressed) {
       if (this.onGround) {
         this.vy = JUMP_VELOCITY;
         this.onGround = false;
         this.hasDoubleJumped = false;
       } else if (!this.hasDoubleJumped) {
-        // For classic double-jump feel (optional; can remove if single-jump only desired)
-        this.vy = JUMP_VELOCITY * 0.92;
+        // Classic double-jump
+        this.vy = JUMP_VELOCITY * 0.94;
         this.hasDoubleJumped = true;
       }
     }
 
-    // 9. Clamp within world bounds (retro style)
+    // --- 9. World bounds clamp (retro)
     if (this.x < 0) this.x = 0;
     if (this.x > GAME_WIDTH - PLAYER_WIDTH) this.x = GAME_WIDTH - PLAYER_WIDTH;
     if (this.y < 0) this.y = 0;
     if (this.y > GAME_HEIGHT - PLAYER_HEIGHT - 1) {
-      // Snap to floor (hard stop, not below visible)
       this.y = GAME_HEIGHT - PLAYER_HEIGHT - 1;
       this.vy = 0;
       this.onGround = true;
@@ -224,9 +208,11 @@ export default class Player {
 
   // PUBLIC_INTERFACE
   /**
-   * Used for integration test: check if player's bbox overlaps some rectangle (collectibles etc).
+   * Returns true if player's AABB overlaps target rect (classic AABB collision).
+   * Used for collectibles, exit, etc.
    */
   overlapsRect(x, y, w, h) {
+    // Classic AABB
     return (
       this.x < x + w &&
       this.x + PLAYER_WIDTH > x &&

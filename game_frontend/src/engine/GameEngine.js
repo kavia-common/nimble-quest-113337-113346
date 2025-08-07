@@ -161,19 +161,14 @@ const GameEngine = ({
   // Checks for gem collection and exit, and returns relevant event triggers.
   function processLevelLogic(player, curLevel, gemsArr, setGems, onLevelComplete, updateCount) {
     let foundGem = false;
-    const px = player.x + 3, py = player.y + 7;
 
-    // Collect gems if player bounding box center overlaps with gem (radius hitbox)
-    gemsArr.forEach((gem, i) => {
-      if (
-        !gem.collected &&
-        Math.hypot((player.x + 0.5 * 12) - gem.x, (player.y + 0.5 * 14) - gem.y) < 12
-      ) {
+    // --- Accurate collectible (gem) AABB collision using player.overlapsRect ---
+    gemsArr.forEach((gem) => {
+      if (!gem.collected && player.overlapsRect(gem.x - 6, gem.y - 6, 12, 12)) {
         gem.collected = true;
         foundGem = true;
         setGems(gemsArr.slice());
-        setForceRerender(n => n+1); // force react update (primitive state)
-        // Update counters up the chain
+        setForceRerender(n => n + 1);
         setPGems(prev => {
           const newVal = prev + 1;
           if (onGameStateUpdate)
@@ -181,23 +176,19 @@ const GameEngine = ({
           return newVal;
         });
         setPScore(prevS => {
-          // +250 for gem
           const nextS = prevS + 250;
           if (onGameStateUpdate)
-            onGameStateUpdate({ score: nextS, lives: pLives, gems: pGems+1, maxGems: pMaxGems, level: levelIdx });
+            onGameStateUpdate({ score: nextS, lives: pLives, gems: pGems + 1, maxGems: pMaxGems, level: levelIdx });
           return nextS;
         });
       }
     });
 
-    // All gems collected + player at exit -> beat level
+    // --- Exit completion if all gems collected and player overlaps exit ---
     if (gemsArr.every(g => g.collected)) {
-      // Exit detection
       if (
-        rectsOverlap(
-          player.x, player.y, 12, 14,
-          curLevel.exit.x, curLevel.exit.y, curLevel.exit.w, curLevel.exit.h
-        )) {
+        player.overlapsRect(curLevel.exit.x, curLevel.exit.y, curLevel.exit.w, curLevel.exit.h)
+      ) {
         onLevelComplete();
       }
     }
@@ -559,6 +550,30 @@ const GameEngine = ({
 
         // Draw player (after enemies for "in front" effect)
         player.draw(ctx);
+
+        // --- DEBUG: Draw platforms and gem hitboxes ---
+        const debug = true;
+        if (debug) {
+          // Platform AABBs
+          ctx.save();
+          ctx.strokeStyle = "#2287d6";
+          ctx.lineWidth = 1;
+          for (let pl of curLevel.platforms) {
+            ctx.setLineDash([1,2]);
+            ctx.strokeRect(pl.x, pl.y, pl.w, pl.h);
+          }
+          ctx.restore();
+
+          // Collectible (gem) bounding boxes
+          ctx.save();
+          levelState.gems.forEach(gem => {
+            ctx.setLineDash([2,2]);
+            ctx.strokeStyle = gem.collected ? "#e67e2299" : "#ff32d7";
+            ctx.globalAlpha = 0.9;
+            ctx.strokeRect(gem.x - 6, gem.y - 6, 12, 12);
+          });
+          ctx.restore();
+        }
 
         // Draw meta labels
         ctx.save();
