@@ -3,6 +3,7 @@ import GameCanvas from '../components/GameCanvas';
 import Player from './Player';
 import * as Physics from './Physics';
 import LEVELS from './levels';
+import { createEnemyInstance, updateEnemies } from './Enemy';
 
 /**
  * GameEngine - Main orchestrator for multi-level loop, rendering, and simulation.
@@ -291,15 +292,12 @@ const GameEngine = ({
   // Initialize enemy state per-level, with proper state for each enemy type
   useEffect(() => {
     if (!LEVELS[levelIdx]) return;
-    // For deep stateful cloning: always reset timers, vy, onGround, etc.
+    // Instantiate autonomous AI per enemy (use new Enemy.js logic where possible)
     setEnemiesState(
-      LEVELS[levelIdx].enemies.map(e => ({
-        ...e,
-        vy: 0,
-        onGround: false,
-        jumpTimer: e.jumpTimer ?? 0,
-        t: e.t ?? 0,
-      }))
+      LEVELS[levelIdx].enemies.map(e => {
+        // Use new AI classes for walker (slime)
+        return createEnemyInstance({ ...e });
+      })
     );
     setProjectiles([]);
   }, [levelIdx]);
@@ -357,8 +355,18 @@ const GameEngine = ({
 
       // --- ENEMY AI UPDATE & PROJECTILES ---
       // Deep-clone for stateful update
-      let newEnemies = enemiesState.map(en => ({ ...en }));
+      let newEnemies = enemiesState.map(en => {
+        // If using new AI class, keep as is. If plain object, clone.
+        if (typeof en.update === "function") {
+          return en;
+        } else {
+          return { ...en };
+        }
+      });
       let newProjectiles = projectiles.map(p => ({ ...p }));
+
+      // Add: autonomous enemy movement (slime AI)
+      updateEnemies(newEnemies, dt);
 
       for (let en of newEnemies) {
         // PATROLLER/WALKER: Moves back and forth horizontally between patrolMin/patrolMax
