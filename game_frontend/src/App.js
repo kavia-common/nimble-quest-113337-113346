@@ -138,7 +138,10 @@ function App() {
         {screen === 'game' && (
           <>
             <HUD score={score} lives={lives} gems={gems} maxGems={maxGems} />
-            <GameEngine {...gameEngineProps} />
+            <GameEngine
+              key={`engine-s${score}-l${lives}-lvl${currentLevel}-${screen}`}
+              {...gameEngineProps}
+            />
             {/* Overlays for game over, next level, etc. */}
             {gameFlowOverlay && (
               <div className="overlay" style={{
