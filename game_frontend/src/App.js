@@ -415,6 +415,26 @@ function App() {
         }
       }
 
+      // --- CAMERA LOGIC ---
+      // Calculate camera position so the player is centered, but camera does not show beyond level bounds
+      const LEVEL_W = (L.platforms?.length
+        ? Math.max(...L.platforms.map(pl => pl.x + pl.w), GAME_WIDTH)
+        : GAME_WIDTH);
+      const LEVEL_H = (L.platforms?.length
+        ? Math.max(...L.platforms.map(pl => pl.y + pl.h), GAME_HEIGHT)
+        : GAME_HEIGHT);
+
+      // Center camera on player, but clamp so the visible view does not exceed the level bounds
+      // (If the level is smaller than the view, just show from 0)
+      let cameraX = Math.max(0, Math.min(
+        (LEVEL_W > GAME_WIDTH ? (p.x + PLAYER_W / 2) - GAME_WIDTH / 2 : 0),
+        LEVEL_W - GAME_WIDTH
+      ));
+      let cameraY = Math.max(0, Math.min(
+        (LEVEL_H > GAME_HEIGHT ? (p.y + PLAYER_H / 2) - GAME_HEIGHT / 2 : 0),
+        LEVEL_H - GAME_HEIGHT
+      ));
+
       // --- DRAWING ---
       const ctx = canvasRef.current?.getContext("2d");
       if (ctx) {
@@ -428,10 +448,10 @@ function App() {
         ctx.save();
         for (let pl of L.platforms) {
           ctx.fillStyle = "#8fd462";
-          ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+          ctx.fillRect(pl.x - cameraX, pl.y - cameraY, pl.w, pl.h);
           ctx.strokeStyle = "#fff880";
           ctx.lineWidth = 2;
-          ctx.strokeRect(pl.x, pl.y, pl.w, pl.h);
+          ctx.strokeRect(pl.x - cameraX, pl.y - cameraY, pl.w, pl.h);
         }
         ctx.restore();
 
@@ -441,7 +461,7 @@ function App() {
           ctx.globalAlpha = gem.collected ? 0.2 : 1.0;
           ctx.fillStyle = gem.collected ? "#ddddbb" : "#ffd700";
           ctx.beginPath();
-          ctx.arc(gem.x, gem.y, GEM_RADIUS, 0, 2 * Math.PI);
+          ctx.arc(gem.x - cameraX, gem.y - cameraY, GEM_RADIUS, 0, 2 * Math.PI);
           ctx.fill();
           ctx.strokeStyle = "#fff880";
           ctx.lineWidth = 1;
@@ -463,10 +483,10 @@ function App() {
           };
         }
         if (ctx._modernSlimeImg && ctx._modernSlimeImg.complete && ctx._modernSlimeImg.naturalWidth > 0) {
-          ctx.drawImage(ctx._modernSlimeImg, nextEnemy.x, nextEnemy.y, ENEMY_W, ENEMY_H);
+          ctx.drawImage(ctx._modernSlimeImg, nextEnemy.x - cameraX, nextEnemy.y - cameraY, ENEMY_W, ENEMY_H);
         } else {
           ctx.fillStyle = "#f47350";
-          ctx.fillRect(nextEnemy.x, nextEnemy.y, ENEMY_W, ENEMY_H);
+          ctx.fillRect(nextEnemy.x - cameraX, nextEnemy.y - cameraY, ENEMY_W, ENEMY_H);
         }
         ctx.globalAlpha = 1;
         ctx.restore();
@@ -477,14 +497,14 @@ function App() {
           ctx.globalAlpha = 0.5 + 0.5 * Math.abs(Math.sin(performance.now() * 0.08));
         }
         ctx.fillStyle = "#ffd700";
-        ctx.fillRect(Math.floor(p.x), Math.floor(p.y), PLAYER_W, PLAYER_H);
+        ctx.fillRect(Math.floor(p.x - cameraX), Math.floor(p.y - cameraY), PLAYER_W, PLAYER_H);
         // Shadow
         ctx.globalAlpha *= 0.13;
         ctx.fillStyle = "#111";
-        ctx.fillRect(Math.floor(p.x + 1), Math.floor(p.y + PLAYER_H), PLAYER_W - 2, 3);
+        ctx.fillRect(Math.floor(p.x - cameraX + 1), Math.floor(p.y - cameraY + PLAYER_H), PLAYER_W - 2, 3);
         ctx.restore();
 
-        // HUD
+        // HUD (drawn HUD stays screen-fixed)
         ctx.save();
         ctx.font = "bold 13px 'Press Start 2P', monospace";
         ctx.fillStyle = "#fffd";
@@ -515,7 +535,7 @@ function App() {
         }
         ctx.restore();
 
-        // Level complete overlay
+        // Level complete overlay (centered relative to camera box, i.e. visual canvas)
         if (levelComplete || transitionTimer) {
           ctx.save();
           ctx.globalAlpha = 0.93;
