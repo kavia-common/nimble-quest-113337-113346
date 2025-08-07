@@ -17,8 +17,12 @@ import { VisualEffects, ParallaxBackground } from './VisualEffects';
  *  - Sample enemies stub (walker/hopper to wire in future)
  */
 
-const GAME_WIDTH = 320;
-const GAME_HEIGHT = 180;
+/*
+ * --- GAME DIMENSIONS: Expanded World for XL Levels ---
+ * All gameplay and rendering constants updated accordingly.
+ */
+const GAME_WIDTH = 640;
+const GAME_HEIGHT = 360;
 const PIXEL_SCALE = 2;
 
 const COLORS = {

@@ -1,70 +1,18 @@
 import React, { useRef, useEffect, useState } from "react";
 import "./App.css";
-
-/**
- * Minimal pixel-art platformer with:
- * - Collectible gems per level (disappear on touch, count toward total)
- * - One patrolling enemy (touch = reset/penalty)
- * - Two simple levels (objectives, level switching, state reset)
- * - Keyboard controls (arrows, WASD, space)
- * All logic self-contained in this single file for the base prototype.
- */
+import LEVELS from "./engine/levels";
 
 // --- Constants ---
-const GAME_WIDTH = 320;
-const GAME_HEIGHT = 180;
+const GAME_WIDTH = 640;
+const GAME_HEIGHT = 360;
 const PIXEL_SCALE = 2;
 const PLAYER_W = 12, PLAYER_H = 14;
 const ENEMY_W = 14, ENEMY_H = 12;
 const GEM_RADIUS = 6;
-const GROUND_HEIGHT = 40;
-const MOVE_SPEED = 90;
-const JUMP_VEL = -195;
-const GRAVITY = 650;
-
-// --- Levels Definition (2 levels) ---
-const LEVELS = [
-  {
-    name: "Level 1: The Garden Gate",
-    platforms: [
-      { x: 0, y: 140, w: 320, h: 40 }, // ground
-      { x: 85, y: 130, w: 48, h: 8 },
-      { x: 200, y: 95, w: 35, h: 8 }
-    ],
-    gems: [
-      { x: 110, y: 124 },
-      { x: 220, y: 140 },
-      { x: 215, y: 103 }
-    ],
-    enemy: {
-      x: 160, y: 128, patrolMin: 85, patrolMax: 170, dir: 1, speed: 38
-    },
-    playerStart: { x: 24, y: 100 },
-    bg: "#232535"
-  },
-  {
-    name: "Level 2: Ruins and Relics",
-    platforms: [
-      { x: 0, y: 140, w: 140, h: 40 },    // left ground
-      { x: 170, y: 150, w: 150, h: 30 },  // right ground (a little higher)
-      { x: 50, y: 112, w: 36, h: 8 },
-      { x: 202, y: 95, w: 40, h: 8 },
-      { x: 266, y: 125, w: 35, h: 8 }
-    ],
-    gems: [
-      { x: 65, y: 100 },
-      { x: 218, y: 103 },
-      { x: 279, y: 127 }
-    ],
-    enemy: {
-      x: 220, y: 120, patrolMin: 210, patrolMax: 290, dir: -1, speed: 42
-    },
-    playerStart: { x: 23, y: 80 },
-    bg: "#344960"
-  }
-];
-
-// --- Helper functions ---
+const GROUND_HEIGHT = 80; // Doubled
+const MOVE_SPEED = 128;   // Slightly increased for larger world
+const JUMP_VEL = -260;
+const GRAVITY = 980;
 
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
@@ -95,9 +43,12 @@ function App() {
   const [hud, setHud] = useState({ gems: 0, lives: 3, msg: "", allGems: 0 });
 
   // --- Player state ---
+  // Always ensure playerStart exists (robust for all LEVELS)
+  let fallbackPlayerStart = LEVELS[curLevel]?.playerStart || { x: 35, y: 210 };
+
   const player = useRef({
-    x: LEVELS[curLevel].playerStart.x,
-    y: LEVELS[curLevel].playerStart.y,
+    x: fallbackPlayerStart.x,
+    y: fallbackPlayerStart.y,
     vx: 0,
     vy: 0,
     onGround: false
@@ -107,9 +58,13 @@ function App() {
   const [gems, setGems] = useState(
     LEVELS[curLevel].gems.map(g => ({ ...g, collected: false }))
   );
-  
+
   // --- Enemy state (single patrol enemy per level) ---
-  const [enemy, setEnemy] = useState({ ...LEVELS[curLevel].enemy });
+  const [enemy, setEnemy] = useState(
+    LEVELS[curLevel].enemies && LEVELS[curLevel].enemies.length > 0
+      ? { ...LEVELS[curLevel].enemies[0] }
+      : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 }
+  );
 
   // --- Lives count (reset on entire game restart) ---
   const [lives, setLives] = useState(3);
@@ -157,14 +112,16 @@ function App() {
   function restartLevel() {
     setHud((h) => ({ ...h, msg: "" }));
     player.current = {
-      x: LEVELS[curLevel].playerStart.x,
-      y: LEVELS[curLevel].playerStart.y,
+      x: LEVELS[curLevel].playerStart?.x ?? 35,
+      y: LEVELS[curLevel].playerStart?.y ?? 210,
       vx: 0,
       vy: 0,
       onGround: false
     };
     setGems(LEVELS[curLevel].gems.map(g => ({ ...g, collected: false })));
-    setEnemy({ ...LEVELS[curLevel].enemy });
+    setEnemy(LEVELS[curLevel].enemies && LEVELS[curLevel].enemies.length > 0
+      ? { ...LEVELS[curLevel].enemies[0] }
+      : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 });
     setLevelComplete(false);
     setTransitionTimer(0);
   }
@@ -182,14 +139,16 @@ function App() {
       setCurLevel(0);
       setLives(3);
       player.current = {
-        x: LEVELS[0].playerStart.x,
-        y: LEVELS[0].playerStart.y,
+        x: LEVELS[0].playerStart?.x ?? 35,
+        y: LEVELS[0].playerStart?.y ?? 210,
         vx: 0,
         vy: 0,
         onGround: false
       };
       setGems(LEVELS[0].gems.map(g => ({ ...g, collected: false })));
-      setEnemy({ ...LEVELS[0].enemy });
+      setEnemy(LEVELS[0].enemies && LEVELS[0].enemies.length > 0
+        ? { ...LEVELS[0].enemies[0] }
+        : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 });
       setLevelComplete(false);
       setTransitionTimer(0);
       return;
@@ -205,28 +164,32 @@ function App() {
     setTransitionTimer(0);
     setTimeout(() => {
       player.current = {
-        x: LEVELS[nextIdx].playerStart.x,
-        y: LEVELS[nextIdx].playerStart.y,
+        x: LEVELS[nextIdx].playerStart?.x ?? 35,
+        y: LEVELS[nextIdx].playerStart?.y ?? 210,
         vx: 0,
         vy: 0,
         onGround: false
       };
       setGems(LEVELS[nextIdx].gems.map(g => ({ ...g, collected: false })));
-      setEnemy({ ...LEVELS[nextIdx].enemy });
+      setEnemy(LEVELS[nextIdx].enemies && LEVELS[nextIdx].enemies.length > 0
+        ? { ...LEVELS[nextIdx].enemies[0] }
+        : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 });
     }, 50);
   }
 
   // --- On level or lives change: reset player, gems, enemy ---
   useEffect(() => {
     player.current = {
-      x: LEVELS[curLevel].playerStart.x,
-      y: LEVELS[curLevel].playerStart.y,
+      x: LEVELS[curLevel].playerStart?.x ?? 35,
+      y: LEVELS[curLevel].playerStart?.y ?? 210,
       vx: 0,
       vy: 0,
       onGround: false
     };
     setGems(LEVELS[curLevel].gems.map(g => ({ ...g, collected: false })));
-    setEnemy({ ...LEVELS[curLevel].enemy });
+    setEnemy(LEVELS[curLevel].enemies && LEVELS[curLevel].enemies.length > 0
+      ? { ...LEVELS[curLevel].enemies[0] }
+      : { x: PLAYER_W, y: GAME_HEIGHT - ENEMY_H - 8, patrolMin: 0, patrolMax: GAME_WIDTH - ENEMY_W, dir: 1, speed: 45 });
     setHud(h => ({
       ...h,
       allGems: LEVELS[curLevel].gems.length,
@@ -267,16 +230,18 @@ function App() {
       const L = LEVELS[curLevel];
       const p = player.current;
 
-      // --- ENEMY update: simple patrol logic ---
+      // --- ENEMY update: simple patrol logic (only for first enemy if present) ---
       let nextEnemy = { ...enemy };
-      nextEnemy.x += nextEnemy.dir * nextEnemy.speed * dt;
-      if (nextEnemy.x < nextEnemy.patrolMin) {
-        nextEnemy.x = nextEnemy.patrolMin;
-        nextEnemy.dir = 1;
-      }
-      if (nextEnemy.x > nextEnemy.patrolMax) {
-        nextEnemy.x = nextEnemy.patrolMax;
-        nextEnemy.dir = -1;
+      if (nextEnemy.patrolMin !== undefined && nextEnemy.patrolMax !== undefined) {
+        nextEnemy.x += nextEnemy.dir * nextEnemy.speed * dt;
+        if (nextEnemy.x < nextEnemy.patrolMin) {
+          nextEnemy.x = nextEnemy.patrolMin;
+          nextEnemy.dir = 1;
+        }
+        if (nextEnemy.x > nextEnemy.patrolMax) {
+          nextEnemy.x = nextEnemy.patrolMax;
+          nextEnemy.dir = -1;
+        }
       }
       setEnemy(nextEnemy);
 
@@ -352,7 +317,6 @@ function App() {
         p.vy = 0;
         isOnGround = true;
       }
-
 
       p.onGround = isOnGround;
 
@@ -430,7 +394,7 @@ function App() {
       if (ctx) {
         // BG
         ctx.save();
-        ctx.fillStyle = L.bg;
+        ctx.fillStyle = L.bgColor || L.bg || "#232535";
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         ctx.restore();
 
@@ -459,13 +423,11 @@ function App() {
           ctx.restore();
         }
 
-        // Enemy
+        // Enemy (draw only first enemy if any)
         ctx.save();
         if (penaltyFlash > 0 && penaltyFlash % 2 === 0) {
           ctx.globalAlpha = 0.4;
         }
-        // Try to use sprite if available, else draw a retro blob
-        // (the user can add a sprite at src/assets/img/slime_modern.png)
         if (ctx._modernSlimeImg === undefined) {
           ctx._modernSlimeImg = new window.Image();
           ctx._modernSlimeImg.src = require("./assets/img/slime_modern.png");
@@ -502,7 +464,7 @@ function App() {
         ctx.fillStyle = "#fffd";
         ctx.shadowColor = "#111";
         ctx.shadowBlur = 1.2;
-        ctx.fillText(L.name, 10, 21);
+        ctx.fillText(L.name || "", 10, 21);
         ctx.font = "9px monospace";
         ctx.fillStyle = "#ffd700";
         ctx.shadowBlur = 0;
@@ -532,10 +494,10 @@ function App() {
           ctx.save();
           ctx.globalAlpha = 0.93;
           ctx.fillStyle = "#181824e6";
-          ctx.fillRect(50, 75, 210, 40);
+          ctx.fillRect(GAME_WIDTH/2-105, GAME_HEIGHT/2-20, 210, 40);
           ctx.strokeStyle = "#fff880";
           ctx.lineWidth = 3;
-          ctx.strokeRect(50, 75, 210, 40);
+          ctx.strokeRect(GAME_WIDTH/2-105, GAME_HEIGHT/2-20, 210, 40);
           ctx.font = "17px 'Press Start 2P', monospace";
           ctx.fillStyle = "#ffd700";
           let msg =
@@ -543,7 +505,7 @@ function App() {
             (levelComplete
               ? "Level Complete! Next up..."
               : "");
-          ctx.fillText(msg, 60, 105);
+          ctx.fillText(msg, GAME_WIDTH/2-85, GAME_HEIGHT/2+10);
           ctx.restore();
         }
       }
@@ -556,7 +518,7 @@ function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curLevel, gems, lives, enemy, levelComplete, transitionTimer]);
-  
+
   // On mount: focus canvas for keyboard
   useEffect(() => {
     if (canvasRef.current) canvasRef.current.focus();

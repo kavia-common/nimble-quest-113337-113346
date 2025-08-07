@@ -22,88 +22,95 @@
 
 const LEVELS = [
   {
-    name: "1-1: The Garden Gate",
+    name: "1-1: The Garden Gate XL",
     bgColor: "#9ad0ec",
     music: null,
-    objective: "Collect all gems & reach the exit",
+    objective: "Collect all gems & reach the exit in the much larger world!",
     platforms: [
-      { x: 0, y: 160, w: 320, h: 20 },
-      { x: 100, y: 124, w: 32, h: 10 },
-      { x: 195, y: 105, w: 22, h: 10 },
-      { x: 220, y: 90, w: 22, h: 10 },
+      { x: 0, y: 320, w: 640, h: 40 },
+      { x: 175, y: 270, w: 84, h: 16 },
+      { x: 390, y: 205, w: 70, h: 16 },
+      { x: 440, y: 320, w: 90, h: 20 },
+      { x: 75, y: 210, w: 48, h: 12 },
+      { x: 560, y: 280, w: 40, h: 8 }
     ],
     gems: [
-      { x: 110, y: 112, collected: false },
-      { x: 202, y: 95, collected: false },
+      { x: 78, y: 180, collected: false },
+      { x: 228, y: 210, collected: false },
+      { x: 480, y: 330, collected: false },
+      { x: 580, y: 245, collected: false }
     ],
-    exit: { x: 292, y: 140, w: 12, h: 20 },
+    exit: { x: 601, y: 290, w: 24, h: 40 },
     enemies: [
       // Patrolling walker
-      { type: "walker", x: 175, y: 151, dir: 1, patrolMin: 175, patrolMax: 270, speed: 35 },
-      // Chaser (pursues in range, not on high ledges)
-      { type: "chaser", x: 45, y: 151, speed: 42, activeRange: 80 },
+      { type: "walker", x: 355, y: 305, dir: 1, patrolMin: 180, patrolMax: 470, speed: 65 },
+      // Chaser (pursues in range)
+      { type: "chaser", x: 82, y: 305, speed: 71, activeRange: 180 },
     ],
     extra: {}
   },
   {
-    name: "1-2: Overgrown Ruins",
+    name: "1-2: Overgrown Ruins XL",
     bgColor: "#88c070",
     music: null,
-    objective: "Find all gems, dodge slimes and projectiles, reach the gold door",
+    objective: "Find all gems, dodge slimes and projectiles, reach the gold door.",
     platforms: [
-      { x: 0, y: 160, w: 170, h: 20 },
-      { x: 200, y: 145, w: 80, h: 10 },
-      { x: 270, y: 110, w: 35, h: 10 },
-      { x: 70, y: 110, w: 40, h: 10 },
-      { x: 130, y: 85, w: 25, h: 10 }, // platform for jumping enemy
-      { x: 14, y: 83, w: 20, h: 10 }, // platform for projectile enemy
+      { x: 0, y: 320, w: 370, h: 40 },
+      { x: 420, y: 270, w: 160, h: 20 },
+      { x: 540, y: 220, w: 70, h: 16 },
+      { x: 149, y: 215, w: 80, h: 17 },
+      { x: 260, y: 170, w: 50, h: 16 },
+      { x: 28, y: 160, w: 41, h: 18 },
+      { x: 600, y: 100, w: 34, h: 12 }
     ],
     gems: [
-      { x: 78, y: 98, collected: false },
-      { x: 280, y: 98, collected: false },
-      { x: 260, y: 135, collected: false }
+      { x: 156, y: 193, collected: false },
+      { x: 553, y: 200, collected: false },
+      { x: 610, y: 330, collected: false },
+      { x: 325, y: 290, collected: false }
     ],
-    exit: { x: 300, y: 90, w: 12, h: 20 },
+    exit: { x: 610, y: 95, w: 22, h: 40 },
     enemies: [
       // Patrolling walker
-      { type: "walker", x: 220, y: 151, dir: -1, patrolMin: 120, patrolMax: 260, speed: 37 },
+      { type: "walker", x: 438, y: 295, dir: -1, patrolMin: 370, patrolMax: 590, speed: 68 },
       // Jumping enemy (hops left/right on platform)
-      { type: "hopper", x: 90, y: 103, dir: 1, jumpCooldown: 1.3, jumpTimer: 0, jumpVy: -105 }, // frog
-      // Projectile thrower (left side, top platform)
-      { type: "projectile", x: 24, y: 76, dir: 1, cooldown: 2.5, t: 0 }, // throws at intervals
-      // Chaser (upper right platform)
-      { type: "chaser", x: 150, y: 77, speed: 56, activeRange: 120 },
+      { type: "hopper", x: 190, y: 200, dir: 1, jumpCooldown: 1.3, jumpTimer: 0, jumpVy: -195 },
+      // Projectile thrower (left side)
+      { type: "projectile", x: 38, y: 143, dir: 1, cooldown: 2.3, t: 0 },
+      // Chaser (upper right)
+      { type: "chaser", x: 597, y: 123, speed: 82, activeRange: 210 },
     ],
     extra: {}
   },
   {
-    name: "1-3: The Old Walls",
+    name: "1-3: The Old Walls XL",
     bgColor: "#707083",
     music: null,
-    objective: "Beware: all four enemy types patrol these ruins.",
+    objective: "All four enemy types prowl these expanded ruins.",
     platforms: [
-      { x: 0, y: 160, w: 320, h: 20 },
-      { x: 60, y: 130, w: 38, h: 10 },
-      { x: 150, y: 128, w: 90, h: 10 },
-      { x: 268, y: 114, w: 46, h: 10 },
-      { x: 180, y: 90, w: 25, h: 10 },
-      { x: 55, y: 82, w: 30, h: 10 }
+      { x: 0, y: 320, w: 640, h: 40 },
+      { x: 85, y: 260, w: 76, h: 22 },
+      { x: 300, y: 256, w: 180, h: 22 },
+      { x: 536, y: 228, w: 95, h: 22 },
+      { x: 370, y: 180, w: 51, h: 16 },
+      { x: 110, y: 156, w: 62, h: 16 }
     ],
     gems: [
-      { x: 170, y: 116, collected: false },
-      { x: 212, y: 80, collected: false },
-      { x: 293, y: 106, collected: false }
+      { x: 340, y: 220, collected: false },
+      { x: 460, y: 166, collected: false },
+      { x: 580, y: 206, collected: false },
+      { x: 100, y: 226, collected: false }
     ],
-    exit: { x: 10, y: 140, w: 12, h: 20 },
+    exit: { x: 25, y: 285, w: 24, h: 38 },
     enemies: [
       // Patroller
-      { type: "walker", x: 290, y: 151, dir: -1, patrolMin: 35, patrolMax: 292, speed: 38 },
+      { type: "walker", x: 474, y: 305, dir: -1, patrolMin: 95, patrolMax: 520, speed: 74 },
       // Jumping enemy, mid floating platform
-      { type: "hopper", x: 134, y: 118, dir: 1, jumpCooldown: 1.0, jumpTimer: 0, jumpVy: -125 },
-      // Chaser, high left starts on upper ledge
-      { type: "chaser", x: 65, y: 71, speed: 40, activeRange: 140 },
+      { type: "hopper", x: 260, y: 240, dir: 1, jumpCooldown: 1.3, jumpTimer: 0, jumpVy: -212 },
+      // Chaser, high left
+      { type: "chaser", x: 135, y: 145, speed: 73, activeRange: 250 },
       // Projectile thrower
-      { type: "projectile", x: 240, y: 123, dir: -1, cooldown: 3.5, t: 0 }
+      { type: "projectile", x: 570, y: 215, dir: -1, cooldown: 2.8, t: 0 }
     ],
     extra: {}
   }
