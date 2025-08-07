@@ -1,23 +1,32 @@
 //
 // Player.js - Refined: Robust pixel-perfect retro platformer physics, collision, and debug visualization.
 //
-/*
-  Responsibilities:
-    - Accurate physics integration (position, velocity, "flush" platform snapping)
-    - Strict jump restriction to only when in contact with platform/floor below
-    - No sinking or hovering—player's bbox lands flat on surface
-    - Correct AABB math for all collision, including collectibles
-    - Debug: Bounding box render & collision console diagnostics
-*/
+// Responsibilities:
+//   - Accurate physics integration (position, velocity, "flush" platform snapping)
+//   - Strict jump restriction to only when in contact with platform/floor below
+//   - No sinking or hovering—player's bbox lands flat on surface
+//   - Correct AABB math for all collision, including collectibles
+//   - Debug: Bounding box render & collision console diagnostics
+//
 
 const PLAYER_WIDTH = 12;
 const PLAYER_HEIGHT = 14;
 const MOVE_SPEED = 90;
 const JUMP_VELOCITY = -195;
 const GRAVITY = 650;
+const GLIDE_GRAVITY = 170; // Reduced gravity for gliding (tunable)
+const MAX_GLIDE_FALL_SPEED = 58; // Max fall speed when gliding (tunable)
 const DASH_VELOCITY = 260;
 const GAME_WIDTH = 320;
 const GAME_HEIGHT = 180;
+
+// Maximum number of jumps (triple jump: 3)
+const MAX_JUMPS = 3;
+
+// Wall jump settings
+const WALL_JUMP_X_VELOCITY = 150;
+const WALL_JUMP_Y_VELOCITY = -170;
+const WALL_JUMP_BUFFER_TIME = 0.16; // seconds: leeway after leaving wall for jump
 
 // PUBLIC_INTERFACE
 export default class Player {
@@ -32,9 +41,21 @@ export default class Player {
     this.vy = 0;
     this.onGround = false;
     this.wasOnGround = false;
-    this.hasDoubleJumped = false;
     this.dashAvailable = true;
     this.facing = 1; // 1: right, -1: left
+
+    this.jumpCount = 0; // Number of jumps performed since last landing
+    this.inputJumpBuffered = false; // To buffer jump press between frames
+
+    // Wall-jump-related fields
+    this.touchingWallLeft = false;
+    this.touchingWallRight = false;
+    this.lastWallDir = 0; // -1 for left, 1 for right
+    this.wallJumpBufferTimer = 0; // seconds left for a wall-jump after leaving wall
+
+    // Gliding state
+    this.isGliding = false;
+
     // Debug
     this._debugLastCollidePlatform = null;
   }
@@ -93,12 +114,45 @@ export default class Player {
   // PUBLIC_INTERFACE
   /**
    * Integrate player movement, flush snap, ground state, and jump/collision handling with strict AABB guarantees.
+   * Adds wall jump logic as well as multi-jump and gliding.
    * @param {number} dt - Delta time (seconds)
-   * @param {object} controls - { left, right, jumpPressed, dashPressed }
+   * @param {object} controls - { left, right, jumpPressed, dashPressed, glide }
    * @param {function} collisionTester - function (x, y, w, h) => boolean
    */
   update(dt, controls, collisionTester) {
     this.wasOnGround = this.onGround;
+
+    // --- Wall contact detection for wall jump mechanic ---
+    let leftWall = false, rightWall = false;
+    if (collisionTester) {
+      // Check at left/right sides of the player bounding box.
+      leftWall = collisionTester(this.x - 1, this.y, 1, PLAYER_HEIGHT);
+      rightWall = collisionTester(this.x + PLAYER_WIDTH, this.y, 1, PLAYER_HEIGHT);
+    }
+    this.touchingWallLeft = leftWall;
+    this.touchingWallRight = rightWall;
+
+    // Determine if wall buffer should be started or refreshed
+    if (!this.onGround && (leftWall || rightWall)) {
+      this.lastWallDir = leftWall ? -1 : (rightWall ? 1 : 0);
+      this.wallJumpBufferTimer = WALL_JUMP_BUFFER_TIME;
+    } else if (!this.onGround && this.wallJumpBufferTimer > 0) {
+      // Decrease buffer if airborne and not touching wall
+      this.wallJumpBufferTimer -= dt;
+      if (this.wallJumpBufferTimer < 0) this.wallJumpBufferTimer = 0;
+    } else {
+      // Not eligible
+      this.lastWallDir = 0;
+      this.wallJumpBufferTimer = 0;
+    }
+
+    // --- Gliding logic
+    // The key must be held, and player must NOT be on ground and must be falling
+    if (controls.glide && !this.onGround && this.vy > 0) {
+      this.isGliding = true;
+    } else {
+      this.isGliding = false;
+    }
 
     // --- 1. Handle horizontal movement & facing
     if (controls.left) {
@@ -117,8 +171,15 @@ export default class Player {
       this.dashAvailable = false;
     }
 
-    // --- 3. Apply gravity
-    this.vy += GRAVITY * dt;
+    // --- 3. Apply gravity, possibly reduced by gliding
+    if (this.isGliding) {
+      this.vy += GLIDE_GRAVITY * dt;
+    } else {
+      this.vy += GRAVITY * dt;
+    }
+    if (this.isGliding && this.vy > MAX_GLIDE_FALL_SPEED) {
+      this.vy = MAX_GLIDE_FALL_SPEED;
+    }
 
     // --- 4. Compute proposed positions
     let nextX = this.x + this.vx * dt;
@@ -142,7 +203,6 @@ export default class Player {
         }
         if (Math.abs(desiredX - this.x) < 0.8) break;
       }
-      // If no step required, allow subpixel
       if (!movedX && !collisionTester(desiredX, this.y, PLAYER_WIDTH, PLAYER_HEIGHT))
         this.x = desiredX;
     }
@@ -163,7 +223,6 @@ export default class Player {
         }
         if (Math.abs(desiredY - this.y) < 0.8) break;
       }
-      // Try subpixel if still not colliding
       if (!collisionTester(this.x, desiredY, PLAYER_WIDTH, PLAYER_HEIGHT))
         this.y = desiredY;
     }
@@ -177,22 +236,49 @@ export default class Player {
         this.vy = 0;
         flushGrounded = true;
         this.dashAvailable = true;
-        this.hasDoubleJumped = false;
+        this.jumpCount = 0; // Reset jump counter on ground
+        this.isGliding = false; // Cancel gliding on touching ground
       }
     }
     this.onGround = flushGrounded;
 
-    // --- 8. Jumping: Only allowed on ground, or (optionally) one midair double-jump
+    // --- 8. Jumping: now supports wall-jump and triple-jump logic ---
     if (controls.jumpPressed) {
-      if (this.onGround) {
-        this.vy = JUMP_VELOCITY;
+      let didWallJump = false;
+      if (
+        !this.onGround &&
+        this.wallJumpBufferTimer > 0 &&
+        this.lastWallDir !== 0
+      ) {
+        // Perform wall jump
+        this.vy = WALL_JUMP_Y_VELOCITY;
+        this.vx = -this.lastWallDir * WALL_JUMP_X_VELOCITY;
+        this.jumpCount = 1; // After wall jump, allow mid-air jumps
+        this.wallJumpBufferTimer = 0;
+        didWallJump = true;
+        this.facing = -this.lastWallDir;
         this.onGround = false;
-        this.hasDoubleJumped = false;
-      } else if (!this.hasDoubleJumped) {
-        // Classic double-jump
-        this.vy = JUMP_VELOCITY * 0.94;
-        this.hasDoubleJumped = true;
       }
+      // Only do regular jump if not just wall-jumped
+      if (
+        !didWallJump &&
+        (
+          (this.onGround && this.jumpCount === 0) ||
+          (!this.onGround && this.jumpCount > 0 && this.jumpCount < MAX_JUMPS)
+        )
+      ) {
+        this.vy = JUMP_VELOCITY * (this.jumpCount === 0 ? 1.0 : 0.93); // Slightly less power for air jumps
+        this.jumpCount += 1;
+        this.onGround = false;
+      }
+    }
+
+    // Snap/jump reset for world ground edge-case (fallback)
+    // Also, if grounded, wall-jump buffer is cancelled.
+    if (this.y >= GAME_HEIGHT - PLAYER_HEIGHT - 1) {
+      this.jumpCount = 0;
+      this.wallJumpBufferTimer = 0;
+      this.isGliding = false;
     }
 
     // --- 9. World bounds clamp (retro)
@@ -203,6 +289,8 @@ export default class Player {
       this.y = GAME_HEIGHT - PLAYER_HEIGHT - 1;
       this.vy = 0;
       this.onGround = true;
+      this.jumpCount = 0;
+      this.isGliding = false;
     }
   }
 
@@ -228,3 +316,4 @@ export default class Player {
     // future: callback used in engine if needed
   }
 }
+

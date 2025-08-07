@@ -3,6 +3,8 @@ import GameCanvas from '../components/GameCanvas';
 import Player from './Player';
 import * as Physics from './Physics';
 import LEVELS from './levels';
+import { createEnemyInstance, updateEnemies } from './Enemy';
+import { VisualEffects, ParallaxBackground } from './VisualEffects';
 
 /**
  * GameEngine - Main orchestrator for multi-level loop, rendering, and simulation.
@@ -26,8 +28,53 @@ const COLORS = {
   exit: '#ef5bc2'
 };
 
+// Load parallax background layers (stub: replace with real images as needed)
+const backgroundAssets = [];
+let loadedBGImgs = [];
+
+// Example: You may later place rich backgrounds in src/assets/img/bg_*.png
+function loadParallaxBGImages() {
+  // Preload up to three layers for parallax, real assets should be added here
+  if (!backgroundAssets.length) {
+    ['bg_layer0', 'bg_layer1', 'bg_layer2'].forEach((base, idx) => {
+      const img = new window.Image();
+      // For now, fallback to color stripes or gradients. Replace with pixel-art .pngs to upgrade.
+      img.src = '';
+      if (!img.src) {
+        // Fallback: draw a gradient to canvas, then export as image
+        const c = document.createElement('canvas');
+        c.width = 800; c.height = 180;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 0, 0, 180);
+        if (idx === 0) {
+          g.addColorStop(0, '#1e242c'); g.addColorStop(1, '#7cada5');
+        } else if (idx === 1) {
+          g.addColorStop(0, 'rgba(38,137,179,0.83)'); g.addColorStop(1, 'rgba(221,210,172,0.14)');
+        } else {
+          g.addColorStop(0, 'rgba(215, 226, 255, .14)'); g.addColorStop(1, '#18182400');
+        }
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 800, 180);
+        img.src = c.toDataURL();
+      }
+      backgroundAssets.push({ img, speed: 0.12 + 0.13 * idx, repeat: 'x' });
+    });
+    loadedBGImgs = backgroundAssets;
+  }
+}
+
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
+}
+
+// --- Visual enhancement state (setup once and on level change) ---
+let parallaxBG = null;
+function getOrInitParallaxBG(width, height) {
+  if (!loadedBGImgs.length) loadParallaxBGImages();
+  if (!parallaxBG) {
+    parallaxBG = new ParallaxBackground(loadedBGImgs, width, height);
+  }
+  return parallaxBG;
 }
 
 // Keyboard mapping: Simple acrobatics/arrow/wasd
@@ -35,7 +82,8 @@ const KEYMAP = {
   left: ['ArrowLeft', 'a', 'A'],
   right: ['ArrowRight', 'd', 'D'],
   jump: [' ', 'Spacebar', 'w', 'W', 'ArrowUp'],
-  dash: ['Shift', 'ShiftLeft', 'ShiftRight']
+  dash: ['Shift', 'ShiftLeft', 'ShiftRight'],
+  glide: ['z', 'Z'] // Use Z as the gliding key (can be changed)
 };
 
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
@@ -121,7 +169,8 @@ const GameEngine = ({
     jump: false,
     jumpPressed: false,
     dash: false,
-    dashPressed: false
+    dashPressed: false,
+    glide: false // <--- New state for gliding
   });
 
   // Keyboard listeners setup/teardown
@@ -137,6 +186,9 @@ const GameEngine = ({
         if (!controlsRef.current.dash) controlsRef.current.dashPressed = true;
         controlsRef.current.dash = true;
       }
+      if (KEYMAP.glide.includes(e.key)) {
+        controlsRef.current.glide = true;
+      }
     }
     function handleKeyUp(e) {
       if (KEYMAP.left.includes(e.key)) controlsRef.current.left = false;
@@ -148,6 +200,9 @@ const GameEngine = ({
       if (KEYMAP.dash.includes(e.key)) {
         controlsRef.current.dash = false;
         controlsRef.current.dashPressed = false;
+      }
+      if (KEYMAP.glide.includes(e.key)) {
+        controlsRef.current.glide = false;
       }
     }
     window.addEventListener('keydown', handleKeyDown);
@@ -196,8 +251,16 @@ const GameEngine = ({
 
   // Draws platforms, exit, gems, etc. for the level
   function drawLevel(ctx, curLevel, gems, completed, enemyState, projectiles) {
-    ctx.fillStyle = curLevel.bgColor || COLORS.fallbackSky;
-    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    // ---- NEW: draw multi-layer parallax or static background ----
+    if (!parallaxBG) parallaxBG = getOrInitParallaxBG(GAME_WIDTH, GAME_HEIGHT);
+    if (parallaxBG && typeof parallaxBG.draw === "function") {
+      // Optionally, scrollX could be hooked to player.x for side-scrolling
+      const scrollDX = 0; // For now: 0, for world1, later tie to camera
+      parallaxBG.draw(ctx, scrollDX);
+    } else {
+      ctx.fillStyle = curLevel.bgColor || COLORS.fallbackSky;
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
 
     // Draw platforms
     curLevel.platforms.forEach(pl => {
@@ -230,17 +293,24 @@ const GameEngine = ({
 
     // Draw enemies
     // Enemies should have per-type animation and visuals
+    // cache loaded image outside loop
+    if (!ctx._modernSlimeImg) {
+      ctx._modernSlimeImg = new window.Image();
+      ctx._modernSlimeImg.src = require("../assets/img/slime_modern.png");
+      ctx._modernSlimeImgLoaded = false;
+      ctx._modernSlimeImg.onload = () => { ctx._modernSlimeImgLoaded = true; };
+    }
     enemyState.forEach(en => {
       ctx.save();
       if (en.type === "walker") {
-        ctx.fillStyle = "#f47350";
-        ctx.fillRect(en.x, en.y, 14, 12);
-        // classic horizontal-eyed "slime"
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(en.x+3, en.y+4, 3, 2);
-        ctx.fillRect(en.x+8, en.y+4, 3, 2);
-        ctx.strokeStyle = "#fff";
-        ctx.strokeRect(en.x, en.y, 14, 12);
+        // Modern pixel-art slime
+        if (ctx._modernSlimeImg && ctx._modernSlimeImg.complete && ctx._modernSlimeImg.naturalWidth > 0) {
+          ctx.drawImage(ctx._modernSlimeImg, en.x, en.y, 14, 12);
+        } else {
+          // fallback: colored rectangle while image loads
+          ctx.fillStyle = "#f47350";
+          ctx.fillRect(en.x, en.y, 14, 12);
+        }
       } else if (en.type === "hopper") {
         ctx.fillStyle = "#53b0ef";
         ctx.fillRect(en.x, en.y, 12, 13);
@@ -291,15 +361,12 @@ const GameEngine = ({
   // Initialize enemy state per-level, with proper state for each enemy type
   useEffect(() => {
     if (!LEVELS[levelIdx]) return;
-    // For deep stateful cloning: always reset timers, vy, onGround, etc.
+    // Instantiate autonomous AI per enemy (use new Enemy.js logic where possible)
     setEnemiesState(
-      LEVELS[levelIdx].enemies.map(e => ({
-        ...e,
-        vy: 0,
-        onGround: false,
-        jumpTimer: e.jumpTimer ?? 0,
-        t: e.t ?? 0,
-      }))
+      LEVELS[levelIdx].enemies.map(e => {
+        // Use new AI classes for walker (slime)
+        return createEnemyInstance({ ...e });
+      })
     );
     setProjectiles([]);
   }, [levelIdx]);
@@ -332,8 +399,9 @@ const GameEngine = ({
         if (pLives - 1 <= 0) {
           if (onGameOver) onGameOver();
         } else {
-          // Restart level, maintain updated lives
-          setLevelIdx(idx => idx);
+          // --- Restart level: Construct a fresh Player instance to restore jump/dash state ---
+          playerRef.current = new Player({ x: 16, y: 120 });
+          setLevelIdx(idx => idx); // triggers useEffect; also resets levelState, etc.
           setPScore(prevS => prevS); // score persists
           setPGems(0); // reset collected for level
         }
@@ -356,8 +424,18 @@ const GameEngine = ({
 
       // --- ENEMY AI UPDATE & PROJECTILES ---
       // Deep-clone for stateful update
-      let newEnemies = enemiesState.map(en => ({ ...en }));
+      let newEnemies = enemiesState.map(en => {
+        // If using new AI class, keep as is. If plain object, clone.
+        if (typeof en.update === "function") {
+          return en;
+        } else {
+          return { ...en };
+        }
+      });
       let newProjectiles = projectiles.map(p => ({ ...p }));
+
+      // Add: autonomous enemy movement (slime AI)
+      updateEnemies(newEnemies, dt);
 
       for (let en of newEnemies) {
         // PATROLLER/WALKER: Moves back and forth horizontally between patrolMin/patrolMax
@@ -457,7 +535,8 @@ const GameEngine = ({
           left: controls.left,
           right: controls.right,
           jumpPressed: controls.jumpPressed,
-          dashPressed: controls.dashPressed
+          dashPressed: controls.dashPressed,
+          glide: controls.glide // Pass current gliding state
         },
         // Custom collision tester — allow pixel-perfect AABB resolution
         (x, y, w, h) => {
@@ -512,6 +591,13 @@ const GameEngine = ({
         },
         setForceRerender
       );
+
+      // --- FALLING OFF MAP = DEATH ---
+      // Detect if player has fallen too far below level; trigger defeat if so.
+      const FALL_DEATH_Y = GAME_HEIGHT + 32;
+      if (!levelState.completed && !levelState.transitioning && player.y > FALL_DEATH_Y) {
+        defeatPlayer();
+      }
 
       // ENEMY & PROJECTILE COLLISION with player
       // (If player collides with any enemy or projectile, defeat)
@@ -601,6 +687,12 @@ const GameEngine = ({
           ctx.fillStyle = "#ffd700";
           ctx.fillText(levelState.message, 52, 90);
           ctx.restore();
+        }
+
+        // --- MODERN-RETRO FINAL: CRT/Scanline/Palette Postprocessing ---
+        // (Optional: toggle with future user settings)
+        if (typeof VisualEffects?.applyCRTPass === "function") {
+          VisualEffects.applyCRTPass(ctx.canvas, { strength: 0.23, scanlineOpacity: 0.19, bloom: 0.08 });
         }
       }
 
