@@ -14,6 +14,9 @@ const MOVE_SPEED = 128;   // Slightly increased for larger world
 const JUMP_VEL = -260;
 const GRAVITY = 980;
 
+// --- Triple jump constant: maximum allowed jumps before landing ---
+const MAX_JUMPS = 3;
+
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
 }
@@ -47,12 +50,14 @@ function App() {
   // Always ensure playerStart exists (robust for all LEVELS)
   let fallbackPlayerStart = LEVELS[curLevel]?.playerStart || { x: 35, y: 210 };
 
+  // Triple jump fields: store persistent jumpCount in this ref (lives across re-renders)
   const player = useRef({
     x: fallbackPlayerStart.x,
     y: fallbackPlayerStart.y,
     vx: 0,
     vy: 0,
-    onGround: false
+    onGround: false,
+    jumpCount: 0     // Number of jumps performed since last landing
   });
 
   // --- Gems state (regenerate on level load) ---
@@ -246,7 +251,7 @@ function App() {
       }
       setEnemy(nextEnemy);
 
-      // --- PLATFORM collision: Improved robust solution (prevents edge fallthrough, ensures standing on any platform)
+      // --- PLATFORM collision: Improved robust solution with triple jump support ---
       let isOnGround = false;
       let standPlatform = null;
 
@@ -256,37 +261,32 @@ function App() {
         if (
           (p.x + PLAYER_W) > (pl.x + 0.5) &&
           (p.x + 0.5) < (pl.x + pl.w) &&
-          Math.abs((p.y + PLAYER_H) - pl.y) < 1.15 && // Flush on top (allow <1.15px due to float math)
+          Math.abs((p.y + PLAYER_H) - pl.y) < 1.15 && // Flush on top (allow <1.15px)
           p.vy >= 0 // Only consider for downward movement or standing
         ) {
-          // Only land if was falling or very close to ground
           if ((p.y + PLAYER_H) <= pl.y + pl.h) {
-            // Stand on this platform
             p.y = pl.y - PLAYER_H;
             p.vy = 0;
             isOnGround = true;
             standPlatform = pl;
-            break; // Pick first eligible (higher Y)
+            break;
           }
         }
       }
-      // Horizontal wall collision: left/right nudge - but *after* vertical/snap
+      // Horizontal wall collision after vertical snap
       for (let pl of L.platforms) {
-        // Only interact if intersected vertically (player within platform height except for head/tail)
         if (
           p.y + PLAYER_H > pl.y + 2 &&
           p.y < pl.y + pl.h - 2 &&
           (p.x + PLAYER_W) > pl.x &&
           p.x < (pl.x + pl.w)
         ) {
-          // If moving right
           if (p.vx > 0) p.x = Math.min(p.x, pl.x - PLAYER_W - 0.01);
-          // If moving left
           if (p.vx < 0) p.x = Math.max(p.x, pl.x + pl.w + 0.01);
         }
       }
 
-      // --- Movement controls & physics ---
+      // --- Movement controls, physics, and triple jump logic ---
       if (!levelComplete && !transitionTimer && !deathTimer) {
         // Horizontal move
         if (controls.current.left) {
@@ -300,14 +300,23 @@ function App() {
         // Gravity always
         p.vy += GRAVITY * dt;
 
-        // Only allow jump if landed flush on any platform (no double-jump here)
-        if (controls.current.jumpPressed && isOnGround) {
-          p.vy = JUMP_VEL;
-          isOnGround = false;
+        // -- TRIPLE JUMP HANDLING --
+        // Jump only if less than MAX_JUMPS performed since last landing
+        if (controls.current.jumpPressed) {
+          if (isOnGround) {
+            // Grounded: fresh jump (reset)
+            p.vy = JUMP_VEL;
+            p.jumpCount = 1;
+            isOnGround = false;
+          } else if (p.jumpCount < MAX_JUMPS) {
+            // In-air extra jump
+            p.vy = JUMP_VEL * 0.93; // Slightly reduced power for extra jumps
+            p.jumpCount += 1;
+          }
         }
         controls.current.jumpPressed = false;
 
-        // Integrate position using physics (moves first, then collision correct)
+        // Integrate position with physics
         p.x += p.vx * dt;
         p.y += p.vy * dt;
 
@@ -328,6 +337,11 @@ function App() {
         p.y = GAME_HEIGHT - PLAYER_H;
         p.vy = 0;
         isOnGround = true;
+      }
+
+      // --- Triple jump reset: landing (platform or ground) resets jump count ---
+      if (isOnGround) {
+        p.jumpCount = 0;
       }
 
       p.onGround = isOnGround;
