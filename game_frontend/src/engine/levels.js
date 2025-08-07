@@ -37,109 +37,226 @@ function gemsForPlatforms(platforms, opts = {}) {
 
 // PUBLIC_INTERFACE: Array of Level objects
 const LEVELS = [
+  // 1-1 THE GARDEN GATE XL (revamped for maximum use of space)
   {
     name: "1-1: The Garden Gate XL",
     bgColor: "#9ad0ec",
     music: null,
-    objective: "Collect all gems & reach the exit in the much larger world!",
+    objective: "Collect all gems & reach the exit in a true sprawling garden world!",
     platforms: [
+      { x: 0, y: 320, w: 640, h: 40 },         // Floor
+      { x: 50, y: 250, w: 120, h: 18 },
+      { x: 240, y: 258, w: 110, h: 20 },
+      { x: 420, y: 180, w: 85, h: 16 },
+      { x: 518, y: 102, w: 78, h: 15 },
+      { x: 120, y: 105, w: 180, h: 14 },
+      { x: 320, y: 64, w: 98, h: 13 },
+      { x: 599, y: 320, w: 41, h: 25 },         // Ground bump at far end
+    ],
+    gems: gemsForPlatforms([
       { x: 0, y: 320, w: 640, h: 40 },
-      { x: 175, y: 270, w: 84, h: 16 },
-      { x: 390, y: 205, w: 70, h: 16 },
-      { x: 440, y: 320, w: 90, h: 20 },
-      { x: 75, y: 210, w: 48, h: 12 },
-      { x: 560, y: 280, w: 40, h: 8 }
-    ],
-    gems: gemsForPlatforms(
-      [
-        { x: 0, y: 320, w: 640, h: 40 },
-        { x: 175, y: 270, w: 84, h: 16 },
-        { x: 390, y: 205, w: 70, h: 16 },
-        { x: 440, y: 320, w: 90, h: 20 },
-        { x: 75, y: 210, w: 48, h: 12 },
-        { x: 560, y: 280, w: 40, h: 8 }
-      ]
-      // No manual ground gems
-    ),
-    exit: { x: 601, y: 290, w: 24, h: 40 },
+      { x: 50, y: 250, w: 120, h: 18 },
+      { x: 240, y: 258, w: 110, h: 20 },
+      { x: 420, y: 180, w: 85, h: 16 },
+      { x: 518, y: 102, w: 78, h: 15 },
+      { x: 120, y: 105, w: 180, h: 14 },
+      { x: 320, y: 64, w: 98, h: 13 },
+      { x: 599, y: 320, w: 41, h: 25 },
+    ]),
+    playerStart: { x: 36, y: 260 },
+    exit: { x: 610, y: 295, w: 26, h: 45 },
     enemies: [
-      { type: "walker", x: 355, y: 305, dir: 1, patrolMin: 180, patrolMax: 470, speed: 65 },
-      { type: "chaser", x: 82, y: 305, speed: 71, activeRange: 180 }
+      { type: "walker", x: 155, y: 302, dir: 1, patrolMin: 40, patrolMax: 240, speed: 45 },
+      { type: "chaser", x: 470, y: 180, speed: 65, activeRange: 170 },
     ],
-    extra: {}
+    extra: {},
   },
+
+  // 1-2 OVERGROWN RUINS XL
   {
     name: "1-2: Overgrown Ruins XL",
     bgColor: "#88c070",
     music: null,
-    objective: "Find all gems, dodge slimes and projectiles, reach the gold door.",
+    objective: "Find all gems, dodge slimes, projectiles, and hop between crumbly ruins.",
     platforms: [
-      { x: 0, y: 320, w: 370, h: 40 },
-      { x: 420, y: 270, w: 160, h: 20 },
-      { x: 540, y: 220, w: 70, h: 16 },
-      { x: 149, y: 215, w: 80, h: 17 },
-      { x: 260, y: 170, w: 50, h: 16 },
-      { x: 28, y: 160, w: 41, h: 18 },
-      { x: 600, y: 100, w: 34, h: 12 }
+      { x: 0, y: 320, w: 200, h: 40 },
+      { x: 225, y: 314, w: 130, h: 18 }, // Ground middle ledge
+      { x: 378, y: 288, w: 98, h: 16 },
+      { x: 505, y: 235, w: 113, h: 14 },
+      { x: 59, y: 210, w: 68, h: 14 },
+      { x: 161, y: 152, w: 126, h: 15 },
+      { x: 402, y: 130, w: 180, h: 13 },
+      { x: 19, y: 120, w: 51, h: 17 },
+      { x: 585, y: 320, w: 55, h: 17 },  // Far right ground
     ],
-    gems: gemsForPlatforms(
-      [
-        { x: 0, y: 320, w: 370, h: 40 },
-        { x: 420, y: 270, w: 160, h: 20 },
-        { x: 540, y: 220, w: 70, h: 16 },
-        { x: 149, y: 215, w: 80, h: 17 },
-        { x: 260, y: 170, w: 50, h: 16 },
-        { x: 28, y: 160, w: 41, h: 18 },
-        { x: 600, y: 100, w: 34, h: 12 }
-      ],
-      {
-        // Add a manual ground gem at far right of ground segment
-        manualGroundGems: [
-          { x: 610 + 15, y: 320 - 6, collected: false }
-        ]
-      }
-    ),
-    exit: { x: 610, y: 95, w: 22, h: 40 },
+    gems: gemsForPlatforms([
+      { x: 0, y: 320, w: 200, h: 40 },
+      { x: 225, y: 314, w: 130, h: 18 },
+      { x: 378, y: 288, w: 98, h: 16 },
+      { x: 505, y: 235, w: 113, h: 14 },
+      { x: 59, y: 210, w: 68, h: 14 },
+      { x: 161, y: 152, w: 126, h: 15 },
+      { x: 402, y: 130, w: 180, h: 13 },
+      { x: 19, y: 120, w: 51, h: 17 },
+      { x: 585, y: 320, w: 55, h: 17 },
+    ], { manualGroundGems: [{ x: 610, y: 320 - 6, collected: false }] }),
+    playerStart: { x: 43, y: 255 },
+    exit: { x: 620, y: 235, w: 18, h: 61 },
     enemies: [
-      { type: "walker", x: 438, y: 295, dir: -1, patrolMin: 370, patrolMax: 590, speed: 68 },
-      { type: "hopper", x: 190, y: 200, dir: 1, jumpCooldown: 1.3, jumpTimer: 0, jumpVy: -195 },
-      { type: "projectile", x: 38, y: 143, dir: 1, cooldown: 2.3, t: 0 },
-      { type: "chaser", x: 597, y: 123, speed: 82, activeRange: 210 }
+      { type: "walker", x: 295, y: 300, dir: -1, patrolMin: 190, patrolMax: 360, speed: 68 },
+      { type: "hopper", x: 155, y: 133, dir: 1, jumpCooldown: 1.25, jumpTimer: 0, jumpVy: -161 },
+      { type: "projectile", x: 44, y: 102, dir: 1, cooldown: 2.1, t: 0 },
+      { type: "chaser", x: 585, y: 145, speed: 66, activeRange: 220 },
     ],
-    extra: {}
+    extra: {},
   },
+
+  // 1-3 THE OLD WALLS XL
   {
     name: "1-3: The Old Walls XL",
     bgColor: "#707083",
     music: null,
-    objective: "All four enemy types prowl these expanded ruins.",
+    objective: "Four enemy types prowl these ruined platforms, requiring acrobatic play.",
     platforms: [
       { x: 0, y: 320, w: 640, h: 40 },
-      { x: 85, y: 260, w: 76, h: 22 },
-      { x: 300, y: 256, w: 180, h: 22 },
-      { x: 536, y: 228, w: 95, h: 22 },
-      { x: 370, y: 180, w: 51, h: 16 },
-      { x: 110, y: 156, w: 62, h: 16 }
+      { x: 45, y: 234, w: 69, h: 15 },
+      { x: 220, y: 212, w: 106, h: 15 },
+      { x: 393, y: 165, w: 120, h: 12 },
+      { x: 89, y: 98, w: 112, h: 13 },
+      { x: 540, y: 105, w: 72, h: 12 },
+      { x: 320, y: 58, w: 68, h: 13 },    // Top middle
+      { x: 599, y: 320, w: 37, h: 28 },   // Right bump
     ],
-    gems: gemsForPlatforms(
-      [
-        { x: 0, y: 320, w: 640, h: 40 },
-        { x: 85, y: 260, w: 76, h: 22 },
-        { x: 300, y: 256, w: 180, h: 22 },
-        { x: 536, y: 228, w: 95, h: 22 },
-        { x: 370, y: 180, w: 51, h: 16 },
-        { x: 110, y: 156, w: 62, h: 16 }
-      ]
-      // No manual ground gems
-    ),
-    exit: { x: 25, y: 285, w: 24, h: 38 },
+    gems: gemsForPlatforms([
+      { x: 0, y: 320, w: 640, h: 40 },
+      { x: 45, y: 234, w: 69, h: 15 },
+      { x: 220, y: 212, w: 106, h: 15 },
+      { x: 393, y: 165, w: 120, h: 12 },
+      { x: 89, y: 98, w: 112, h: 13 },
+      { x: 540, y: 105, w: 72, h: 12 },
+      { x: 320, y: 58, w: 68, h: 13 },
+      { x: 599, y: 320, w: 37, h: 28 },
+    ]),
+    playerStart: { x: 56, y: 195 },
+    exit: { x: 620, y: 290, w: 19, h: 44 },
     enemies: [
-      { type: "walker", x: 474, y: 305, dir: -1, patrolMin: 95, patrolMax: 520, speed: 74 },
-      { type: "hopper", x: 260, y: 240, dir: 1, jumpCooldown: 1.3, jumpTimer: 0, jumpVy: -212 },
-      { type: "chaser", x: 135, y: 145, speed: 73, activeRange: 250 },
-      { type: "projectile", x: 570, y: 215, dir: -1, cooldown: 2.8, t: 0 }
+      { type: "walker", x: 120, y: 310, dir: 1, patrolMin: 60, patrolMax: 210, speed: 52 },
+      { type: "hopper", x: 460, y: 152, dir: -1, jumpCooldown: 1.2, jumpTimer: 0, jumpVy: -176 },
+      { type: "chaser", x: 162, y: 85, speed: 70, activeRange: 200 },
+      { type: "projectile", x: 562, y: 96, dir: -1, cooldown: 2.65, t: 0 },
     ],
-    extra: {}
+    extra: {},
+  },
+
+  // 2-1 MOLTEN CAVES (NEW)
+  {
+    name: "2-1: Molten Caves",
+    bgColor: "#772828",
+    music: null,
+    objective: "Hot floor! Time jumps between geysers and falling blocks.",
+    platforms: [
+      { x: 0, y: 320, w: 640, h: 38 },
+      { x: 80, y: 245, w: 85, h: 14 },
+      { x: 240, y: 270, w: 130, h: 14 },
+      { x: 440, y: 190, w: 120, h: 12 },
+      { x: 175, y: 159, w: 56, h: 10 },
+      { x: 520, y: 82, w: 104, h: 13 },
+      { x: 312, y: 92, w: 61, h: 12 },
+      { x: 120, y: 60, w: 65, h: 10 },
+    ],
+    gems: gemsForPlatforms([
+      { x: 0, y: 320, w: 640, h: 38 },
+      { x: 80, y: 245, w: 85, h: 14 },
+      { x: 240, y: 270, w: 130, h: 14 },
+      { x: 440, y: 190, w: 120, h: 12 },
+      { x: 175, y: 159, w: 56, h: 10 },
+      { x: 520, y: 82, w: 104, h: 13 },
+      { x: 312, y: 92, w: 61, h: 12 },
+      { x: 120, y: 60, w: 65, h: 10 },
+    ]),
+    playerStart: { x: 22, y: 256 },
+    exit: { x: 622, y: 78, w: 18, h: 48 },
+    enemies: [
+      { type: "walker", x: 96, y: 305, dir: 1, patrolMin: 64, patrolMax: 210, speed: 66 },
+      { type: "hopper", x: 355, y: 255, dir: -1, jumpCooldown: 1.20, jumpTimer: 0, jumpVy: -107 },
+      { type: "chaser", x: 418, y: 175, speed: 55, activeRange: 150 },
+      { type: "projectile", x: 510, y: 170, dir: -1, cooldown: 1.85, t: 0 },
+    ],
+    extra: {},
+  },
+
+  // 2-2 FROSTBOUND SPIRES (NEW)
+  {
+    name: "2-2: Frostbound Spires",
+    bgColor: "#90d6ff",
+    music: null,
+    objective: "Slippery ledges, tall towers. Ride the wind to hidden gems!",
+    platforms: [
+      { x: 0, y: 320, w: 640, h: 38 },
+      { x: 97, y: 242, w: 42, h: 19 },
+      { x: 170, y: 192, w: 45, h: 18 },
+      { x: 280, y: 150, w: 80, h: 20 },
+      { x: 555, y: 200, w: 60, h: 24 },
+      { x: 420, y: 105, w: 70, h: 18 },
+      { x: 65, y: 104, w: 66, h: 18 },
+      { x: 320, y: 60, w: 68, h: 14 },    // Top spire
+    ],
+    gems: gemsForPlatforms([
+      { x: 0, y: 320, w: 640, h: 38 },
+      { x: 97, y: 242, w: 42, h: 19 },
+      { x: 170, y: 192, w: 45, h: 18 },
+      { x: 280, y: 150, w: 80, h: 20 },
+      { x: 555, y: 200, w: 60, h: 24 },
+      { x: 420, y: 105, w: 70, h: 18 },
+      { x: 65, y: 104, w: 66, h: 18 },
+      { x: 320, y: 60, w: 68, h: 14 },
+    ], { manualGroundGems: [{ x: 10, y: 320 - 6, collected: false }, { x: 630, y: 320 - 6, collected: false }] }),
+    playerStart: { x: 45, y: 275 },
+    exit: { x: 24, y: 63, w: 18, h: 47 },
+    enemies: [
+      { type: "walker", x: 312, y: 305, dir: -1, patrolMin: 200, patrolMax: 390, speed: 74 },
+      { type: "hopper", x: 278, y: 133, dir: -1, jumpCooldown: 1.33, jumpTimer: 0, jumpVy: -115 },
+      { type: "chaser", x: 555, y: 185, speed: 82, activeRange: 210 },
+      { type: "projectile", x: 121, y: 92, dir: 1, cooldown: 1.26, t: 0 },
+    ],
+    extra: {},
+  },
+
+  // 2-3 CRYSTAL MIDNIGHT (NEW) - vertical challenge
+  {
+    name: "2-3: Crystal Midnight",
+    bgColor: "#343355",
+    music: null,
+    objective: "Ascend the darkness! Hidden platforms shimmer with gems.",
+    platforms: [
+      { x: 0, y: 320, w: 640, h: 40 },
+      { x: 120, y: 280, w: 94, h: 9 },
+      { x: 330, y: 250, w: 80, h: 9 },
+      { x: 520, y: 214, w: 97, h: 10 },
+      { x: 390, y: 165, w: 70, h: 11 },
+      { x: 170, y: 125, w: 120, h: 11 },
+      { x: 64, y: 80, w: 66, h: 10 },
+      { x: 285, y: 48, w: 70, h: 11 }, // Very top
+    ],
+    gems: gemsForPlatforms([
+      { x: 0, y: 320, w: 640, h: 40 },
+      { x: 120, y: 280, w: 94, h: 9 },
+      { x: 330, y: 250, w: 80, h: 9 },
+      { x: 520, y: 214, w: 97, h: 10 },
+      { x: 390, y: 165, w: 70, h: 11 },
+      { x: 170, y: 125, w: 120, h: 11 },
+      { x: 64, y: 80, w: 66, h: 10 },
+      { x: 285, y: 48, w: 70, h: 11 },
+    ]),
+    playerStart: { x: 24, y: 270 },
+    exit: { x: 622, y: 39, w: 16, h: 49 },
+    enemies: [
+      { type: "walker", x: 170, y: 315, dir: 1, patrolMin: 124, patrolMax: 290, speed: 66 },
+      { type: "chaser", x: 512, y: 204, speed: 60, activeRange: 150 },
+      { type: "projectile", x: 335, y: 233, dir: 1, cooldown: 1.87, t: 0 },
+      { type: "hopper", x: 336, y: 36, dir: 1, jumpCooldown: 1.45, jumpTimer: 0, jumpVy: -120 },
+    ],
+    extra: {},
   }
 ];
 
