@@ -177,22 +177,37 @@ export default class Player {
         this.vy = 0;
         flushGrounded = true;
         this.dashAvailable = true;
-        this.hasDoubleJumped = false;
+        this.hasDoubleJumped = false; // Reset double jump on ground
+        this._doubleJumpAvailable = true; // Track extra state for safety
       }
     }
     this.onGround = flushGrounded;
 
-    // --- 8. Jumping: Only allowed on ground, or (optionally) one midair double-jump
+    // --- 8. Jumping: double jump logic ---
+    // Only allow first jump from ground, then exactly one in air ("double jump")
+    // Releasing/re-pressing required for both
+    if (typeof this._doubleJumpAvailable === "undefined") this._doubleJumpAvailable = true;
+
     if (controls.jumpPressed) {
       if (this.onGround) {
+        // First jump from ground
         this.vy = JUMP_VELOCITY;
         this.onGround = false;
         this.hasDoubleJumped = false;
-      } else if (!this.hasDoubleJumped) {
-        // Classic double-jump
+        this._doubleJumpAvailable = true;
+      } else if (this._doubleJumpAvailable && !this.hasDoubleJumped) {
+        // Allow one mid-air jump
         this.vy = JUMP_VELOCITY * 0.94;
         this.hasDoubleJumped = true;
+        this._doubleJumpAvailable = false;
       }
+    }
+
+    // If falling all the way or descending, reset double jump if snapped to world ground
+    // (in case platforms are missed)
+    if (this.y >= GAME_HEIGHT - PLAYER_HEIGHT - 1) {
+      this._doubleJumpAvailable = true;
+      this.hasDoubleJumped = false;
     }
 
     // --- 9. World bounds clamp (retro)
