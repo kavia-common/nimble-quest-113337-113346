@@ -153,7 +153,7 @@ const GameEngine = () => {
   }
 
   // Draws platforms, exit, gems, etc. for the level
-  function drawLevel(ctx, curLevel, gems, completed) {
+  function drawLevel(ctx, curLevel, gems, completed, enemyState, projectiles) {
     ctx.fillStyle = curLevel.bgColor || COLORS.fallbackSky;
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -186,28 +186,92 @@ const GameEngine = () => {
       ctx.restore();
     });
 
-    // Demo: Draw enemies stub
-    curLevel.enemies.forEach(en => {
+    // Draw enemies
+    // Enemies should have per-type animation and visuals
+    enemyState.forEach(en => {
       ctx.save();
       if (en.type === "walker") {
-        ctx.fillStyle = '#f47350';
+        ctx.fillStyle = "#f47350";
         ctx.fillRect(en.x, en.y, 14, 12);
-        ctx.strokeStyle = '#fff';
+        // classic horizontal-eyed "slime"
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(en.x+3, en.y+4, 3, 2);
+        ctx.fillRect(en.x+8, en.y+4, 3, 2);
+        ctx.strokeStyle = "#fff";
         ctx.strokeRect(en.x, en.y, 14, 12);
       } else if (en.type === "hopper") {
-        ctx.fillStyle = '#53b0ef';
+        ctx.fillStyle = "#53b0ef";
         ctx.fillRect(en.x, en.y, 12, 13);
-        ctx.strokeStyle = '#fff';
+        // simple frog eyes
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(en.x+2, en.y+2, 2, 2);
+        ctx.fillRect(en.x+8, en.y+2, 2, 2);
+        ctx.strokeStyle = "#fff";
         ctx.strokeRect(en.x, en.y, 12, 13);
+      } else if (en.type === "chaser") {
+        ctx.fillStyle = "#b359fe";
+        ctx.fillRect(en.x, en.y, 14, 12);
+        ctx.fillStyle = "#222";
+        ctx.fillRect(en.x+6, en.y+4, 2, 2); // single pixel nose, "ghost"
+        ctx.strokeStyle = "#fff";
+        ctx.strokeRect(en.x, en.y, 14, 12);
+      } else if (en.type === "projectile") {
+        ctx.fillStyle = "#ff951d";
+        ctx.beginPath();
+        ctx.arc(en.x+7, en.y+7, 7, 0, 2*Math.PI); // round thrower
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
       }
       ctx.restore();
     });
+
+    // Projectiles (round bullets, fireballs)
+    projectiles.forEach(proj => {
+      ctx.save();
+      ctx.fillStyle = "#ffed33";
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#c88e25";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    });
   }
+
+  // --- ENEMY LOGIC/RENDER STATE ---
+  const [enemiesState, setEnemiesState] = useState([]);
+  // Projectiles from projectile-throwers (cause defeat to player)
+  const [projectiles, setProjectiles] = useState([]);
+
+  // When level changes, parse and initialize enemyState to a deep copy of level static data
+  useEffect(() => {
+    if (!LEVELS[levelIdx]) return;
+    setEnemiesState(LEVELS[levelIdx].enemies.map(e => ({ ...e })));
+    setProjectiles([]);
+  }, [levelIdx]);
 
   // Main game/animation loop -- handles per-level render and logic
   useEffect(() => {
     let running = true;
     let lastTime = performance.now();
+    let defeatTime = 0;
+    let defeatFlash = false;
+    let defeatTimeoutHandle = null;
+
+    function defeatPlayer() {
+      if (defeatTimeoutHandle) return; // Already in defeat sequence
+      defeatFlash = true;
+      setLevelState(ls => ({
+        ...ls,
+        transitioning: true,
+        message: "Defeated! Restarting level..."
+      }));
+      defeatTimeoutHandle = setTimeout(() => {
+        setLevelIdx(idx => idx); // force re-mount/restart
+      }, 1600);
+    }
 
     function frame() {
       if (!running) return;
@@ -223,6 +287,101 @@ const GameEngine = () => {
       const controls = controlsRef.current;
       const player = playerRef.current;
 
+      // -- ENEMY AI UPDATE --
+      let newEnemies = enemiesState.map(en => ({ ...en }));
+      let newProjectiles = projectiles.map(p => ({ ...p }));
+
+      for (let en of newEnemies) {
+        if (en.type === "walker") {
+          // Patrolling enemy. Inherits "dir" state.
+          en.x += en.dir * (en.speed ?? 36) * dt;
+          // Reverse at patrol bounds
+          en.x = clamp(en.x, en.patrolMin ?? 0, en.patrolMax ?? GAME_WIDTH - 14);
+          if ((en.dir === 1 && en.x >= (en.patrolMax ?? GAME_WIDTH - 14)) ||
+              (en.dir === -1 && en.x <= (en.patrolMin ?? 0))) en.dir *= -1;
+        }
+        else if (en.type === "hopper") {
+          // Hopper logic: jump with cooldown, simple platform support
+          if (typeof en.jumpTimer === "undefined") en.jumpTimer = 0;
+          en.jumpTimer -= dt;
+          if (!en.vy) en.vy = 0;
+          if (!en.onGround) en.vy += 440 * dt;
+          let nextY = en.y + (en.vy ?? 0) * dt;
+          // hanging in air or falling
+          let grounded = false;
+          // Find platform beneath
+          for (let pl of curLevel.platforms) {
+            if (
+              en.x + 11 > pl.x &&
+              en.x < pl.x + pl.w &&
+              nextY + 13 > pl.y &&
+              en.y+10 < pl.y &&
+              nextY + 13 <= pl.y + pl.h
+            ) {
+              grounded = true;
+              nextY = pl.y - 13;
+              en.vy = 0;
+              break;
+            }
+          }
+          // Ground fallback
+          if (nextY + 13 > GAME_HEIGHT - 20) {
+            grounded = true;
+            nextY = GAME_HEIGHT - 20 - 13;
+            en.vy = 0;
+          }
+          en.onGround = grounded;
+          en.y = nextY;
+
+          // Hop
+          if (en.onGround && en.jumpTimer <= 0) {
+            en.vy = en.jumpVy || -110;
+            en.dir *= -1; // reverse direction
+            en.jumpTimer = en.jumpCooldown || 1.3;
+            en.x += en.dir * 12;
+            // Clamp to stage
+            en.x = clamp(en.x, 0, GAME_WIDTH-12);
+          } else if (!en.onGround) { 
+            en.x += en.dir * 44 * dt;
+            en.x = clamp(en.x, 0, GAME_WIDTH-12);
+          }
+        }
+        else if (en.type === "chaser") {
+          // Simple AI: move toward player only if within range and roughly same y
+          let dx = player.x - en.x;
+          let dy = Math.abs((player.y) - (en.y));
+          if (Math.abs(dx) < (en.activeRange ?? 90) && dy < 30) {
+            en.x += Math.sign(dx) * (en.speed ?? 52) * dt;
+            en.x = clamp(en.x, 0, GAME_WIDTH-14);
+          }
+        }
+        else if (en.type === "projectile") {
+          en.t = en.t ? en.t + dt : dt;
+          if (!en.cooldown) en.cooldown = 2.5;
+          if (en.t >= en.cooldown) {
+            // Fire a projectile
+            newProjectiles.push({
+              x: en.x+7, // center of thrower
+              y: en.y+10,
+              vx: (en.dir??1) * 110,
+              vy: 0,
+              t: 0
+            });
+            en.t = 0; // reset timer
+          }
+        }
+      }
+      // Update projectiles: move, remove out of bounds
+      for (let i = 0; i < newProjectiles.length; ++i) {
+        let p = newProjectiles[i];
+        p.x += p.vx * dt;
+        p.y += (p.vy??0) * dt;
+      }
+      newProjectiles = newProjectiles.filter(p => p.x > -10 && p.x < GAME_WIDTH+10);
+
+      setEnemiesState(newEnemies);
+      setProjectiles(newProjectiles);
+
       // Update player with per-level ground/platform collision
       player.update(
         dt,
@@ -233,8 +392,6 @@ const GameEngine = () => {
           dashPressed: controls.dashPressed
         },
         (x, y, w, h) => {
-          // collide with any platforms or ground
-          // test overlap for any platform
           return curLevel.platforms.some(pl =>
             rectsOverlap(x, y, w, h, pl.x, pl.y, pl.w, pl.h)
           );
@@ -252,7 +409,6 @@ const GameEngine = () => {
         () => {
           // Level complete!
           setLevelState(ls => ({ ...ls, completed: true, transitioning: true, message: 'Level Complete!' }));
-          // Next level after brief pause
           setTimeout(() => {
             if (levelIdx + 1 < LEVELS.length) {
               setLevelIdx(levelIdx + 1);
@@ -269,12 +425,42 @@ const GameEngine = () => {
         setForceRerender
       );
 
+      // PLAYER - ENEMY COLLISION
+      let px = player.x, py = player.y, pw = 12, ph = 14;
+      if (!levelState.completed && !levelState.transitioning) {
+        for (let en of newEnemies) {
+          let ew = (en.type === "hopper") ? 12 : 14;
+          let eh = (en.type === "hopper") ? 13 : 12;
+          // Projectiles are checked separately
+          if (["walker", "hopper", "chaser"].includes(en.type)
+            && rectsOverlap(px, py, pw, ph, en.x, en.y, ew, eh)) {
+            defeatPlayer();
+            break;
+          }
+        }
+        for (let p of newProjectiles) {
+          if (rectsOverlap(px, py, pw, ph, p.x - 3, p.y - 3, 7, 7)) {
+            defeatPlayer();
+            break;
+          }
+        }
+      }
+
       // Render everything
       const ctx = canvasRef.current?.getContext();
       if (ctx) {
-        drawLevel(ctx, curLevel, levelState.gems, levelState.completed);
+        // defeat flash effect
+        if (defeatFlash) {
+          ctx.save();
+          ctx.globalAlpha = 0.45 + 0.35 * Math.abs(Math.sin(performance.now()*0.008));
+          ctx.fillStyle = "#e74c3ca9";
+          ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+          ctx.restore();
+        }
 
-        // Draw player
+        drawLevel(ctx, curLevel, levelState.gems, levelState.completed, newEnemies, newProjectiles);
+
+        // Draw player (after enemies for "in front" effect)
         player.draw(ctx);
 
         // Draw current level name label
@@ -309,7 +495,10 @@ const GameEngine = () => {
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
-    return () => { running = false; };
+    return () => { 
+      running = false;
+      if (defeatTimeoutHandle) clearTimeout(defeatTimeoutHandle);
+    };
     // include levelIdx and levelState as deps so changes force new effect/memory
     // eslint-disable-next-line
   }, [levelIdx, levelState.transitioning]);
