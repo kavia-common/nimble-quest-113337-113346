@@ -14,6 +14,8 @@ const PLAYER_HEIGHT = 14;
 const MOVE_SPEED = 90;
 const JUMP_VELOCITY = -195;
 const GRAVITY = 650;
+const GLIDE_GRAVITY = 170; // Reduced gravity for gliding (tunable)
+const MAX_GLIDE_FALL_SPEED = 58; // Max fall speed when gliding (tunable)
 const DASH_VELOCITY = 260;
 const GAME_WIDTH = 320;
 const GAME_HEIGHT = 180;
@@ -50,6 +52,9 @@ export default class Player {
     this.touchingWallRight = false;
     this.lastWallDir = 0; // -1 for left, 1 for right
     this.wallJumpBufferTimer = 0; // seconds left for a wall-jump after leaving wall
+
+    // Gliding state
+    this.isGliding = false;
 
     // Debug
     this._debugLastCollidePlatform = null;
@@ -109,9 +114,9 @@ export default class Player {
   // PUBLIC_INTERFACE
   /**
    * Integrate player movement, flush snap, ground state, and jump/collision handling with strict AABB guarantees.
-   * Adds wall jump logic as well as multi-jump.
+   * Adds wall jump logic as well as multi-jump and gliding.
    * @param {number} dt - Delta time (seconds)
-   * @param {object} controls - { left, right, jumpPressed, dashPressed }
+   * @param {object} controls - { left, right, jumpPressed, dashPressed, glide }
    * @param {function} collisionTester - function (x, y, w, h) => boolean
    */
   update(dt, controls, collisionTester) {
@@ -141,6 +146,14 @@ export default class Player {
       this.wallJumpBufferTimer = 0;
     }
 
+    // --- Gliding logic
+    // The key must be held, and player must NOT be on ground and must be falling
+    if (controls.glide && !this.onGround && this.vy > 0) {
+      this.isGliding = true;
+    } else {
+      this.isGliding = false;
+    }
+
     // --- 1. Handle horizontal movement & facing
     if (controls.left) {
       this.vx = -MOVE_SPEED;
@@ -158,8 +171,15 @@ export default class Player {
       this.dashAvailable = false;
     }
 
-    // --- 3. Apply gravity
-    this.vy += GRAVITY * dt;
+    // --- 3. Apply gravity, possibly reduced by gliding
+    if (this.isGliding) {
+      this.vy += GLIDE_GRAVITY * dt;
+    } else {
+      this.vy += GRAVITY * dt;
+    }
+    if (this.isGliding && this.vy > MAX_GLIDE_FALL_SPEED) {
+      this.vy = MAX_GLIDE_FALL_SPEED;
+    }
 
     // --- 4. Compute proposed positions
     let nextX = this.x + this.vx * dt;
@@ -183,7 +203,6 @@ export default class Player {
         }
         if (Math.abs(desiredX - this.x) < 0.8) break;
       }
-      // If no step required, allow subpixel
       if (!movedX && !collisionTester(desiredX, this.y, PLAYER_WIDTH, PLAYER_HEIGHT))
         this.x = desiredX;
     }
@@ -204,7 +223,6 @@ export default class Player {
         }
         if (Math.abs(desiredY - this.y) < 0.8) break;
       }
-      // Try subpixel if still not colliding
       if (!collisionTester(this.x, desiredY, PLAYER_WIDTH, PLAYER_HEIGHT))
         this.y = desiredY;
     }
@@ -219,6 +237,7 @@ export default class Player {
         flushGrounded = true;
         this.dashAvailable = true;
         this.jumpCount = 0; // Reset jump counter on ground
+        this.isGliding = false; // Cancel gliding on touching ground
       }
     }
     this.onGround = flushGrounded;
@@ -259,6 +278,7 @@ export default class Player {
     if (this.y >= GAME_HEIGHT - PLAYER_HEIGHT - 1) {
       this.jumpCount = 0;
       this.wallJumpBufferTimer = 0;
+      this.isGliding = false;
     }
 
     // --- 9. World bounds clamp (retro)
@@ -270,6 +290,7 @@ export default class Player {
       this.vy = 0;
       this.onGround = true;
       this.jumpCount = 0;
+      this.isGliding = false;
     }
   }
 

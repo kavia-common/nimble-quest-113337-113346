@@ -36,7 +36,8 @@ const KEYMAP = {
   left: ['ArrowLeft', 'a', 'A'],
   right: ['ArrowRight', 'd', 'D'],
   jump: [' ', 'Spacebar', 'w', 'W', 'ArrowUp'],
-  dash: ['Shift', 'ShiftLeft', 'ShiftRight']
+  dash: ['Shift', 'ShiftLeft', 'ShiftRight'],
+  glide: ['z', 'Z'] // Use Z as the gliding key (can be changed)
 };
 
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
@@ -122,7 +123,8 @@ const GameEngine = ({
     jump: false,
     jumpPressed: false,
     dash: false,
-    dashPressed: false
+    dashPressed: false,
+    glide: false // <--- New state for gliding
   });
 
   // Keyboard listeners setup/teardown
@@ -138,6 +140,9 @@ const GameEngine = ({
         if (!controlsRef.current.dash) controlsRef.current.dashPressed = true;
         controlsRef.current.dash = true;
       }
+      if (KEYMAP.glide.includes(e.key)) {
+        controlsRef.current.glide = true;
+      }
     }
     function handleKeyUp(e) {
       if (KEYMAP.left.includes(e.key)) controlsRef.current.left = false;
@@ -149,6 +154,9 @@ const GameEngine = ({
       if (KEYMAP.dash.includes(e.key)) {
         controlsRef.current.dash = false;
         controlsRef.current.dashPressed = false;
+      }
+      if (KEYMAP.glide.includes(e.key)) {
+        controlsRef.current.glide = false;
       }
     }
     window.addEventListener('keydown', handleKeyDown);
@@ -473,7 +481,8 @@ const GameEngine = ({
           left: controls.left,
           right: controls.right,
           jumpPressed: controls.jumpPressed,
-          dashPressed: controls.dashPressed
+          dashPressed: controls.dashPressed,
+          glide: controls.glide // Pass current gliding state
         },
         // Custom collision tester — allow pixel-perfect AABB resolution
         (x, y, w, h) => {
