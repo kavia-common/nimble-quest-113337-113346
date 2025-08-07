@@ -459,6 +459,7 @@ const GameEngine = ({
       setProjectiles(newProjectiles);
 
       // PLAYER UPDATE (including platform collision)
+      // Update player using improved flush-ground/platform logic. Pass platform list for physics utility.
       player.update(
         dt,
         {
@@ -467,10 +468,23 @@ const GameEngine = ({
           jumpPressed: controls.jumpPressed,
           dashPressed: controls.dashPressed
         },
+        // Custom collision tester — allow pixel-perfect AABB resolution
         (x, y, w, h) => {
-          return curLevel.platforms.some(pl =>
-            rectsOverlap(x, y, w, h, pl.x, pl.y, pl.w, pl.h)
-          );
+          // Classic: check if player-box overlaps with any level platform
+          for (let pl of curLevel.platforms) {
+            if (
+              x < pl.x + pl.w &&
+              x + w > pl.x &&
+              y < pl.y + pl.h &&
+              y + h > pl.y
+            ) {
+              // For debugging, highlight which platform was touched
+              player._debugLastCollidePlatform = pl;
+              return true;
+            }
+          }
+          player._debugLastCollidePlatform = null;
+          return false;
         }
       );
       controlsRef.current.jumpPressed = false;
