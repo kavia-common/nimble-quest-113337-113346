@@ -3,23 +3,39 @@
 //
 // Each level contains: platforms, gem locations, exit, enemies, background info, and meta objectives.
 //
+// PUBLIC_INTERFACE: LEVELS (Array of Level objects)
 
-/**
- * @typedef {Object} Level
- * @property {string} name - Level display label
- * @property {Array} platforms - [{x, y, w, h}]
- * @property {Array} gems - [{x, y, collected: false}]
- * @property {Object} exit - {x, y, w, h}
- * @property {Array} enemies - [{type, x, y, ...}]
- * @property {string} bgColor - background color hex or null
- * @property {string} [music] - music key/filename (optional)
- * @property {string} [objective] - short description of win condition
- * @property {Object} [extra] - any extra per-level
- */
+ /**
+  * Returns gem positions for any level - one gem per platform (except ground),
+  * All gems spawn ON TOP of solid platforms, never below or inside rubble.
+  * If a platform is "ground" (almost as wide as the world), only place gems at
+  * special hand-picked locations.
+  */
+function gemsForPlatforms(platforms, opts = {}) {
+  // Platforms sorted by y: low numbers are higher up
+  const groundY = Math.max(...platforms.map(pl => pl.y));
+  // Identify ground platforms: those whose bottom edge is at groundY
+  const isGround = pl => pl.y >= groundY - 2 && pl.h >= 12 && pl.w > 150;
+  // Place NO gems inside ground except if marked as special segment.
+  // For other platforms: center one gem exactly on platform top center.
+  let gems = [];
+  platforms.forEach((pl) => {
+    if (!isGround(pl)) {
+      gems.push({
+        x: pl.x + pl.w / 2,
+        y: pl.y - 6, // Gem "radius" is 6, sits flush on top
+        collected: false
+      });
+    }
+  });
+  // For select levels, allow manual override for gems-on-ground (e.g. edge segments etc).
+  if (opts.manualGroundGems) {
+    for (const g of opts.manualGroundGems) gems.push(g);
+  }
+  return gems;
+}
 
-// Sample level data array - grows as new levels/worlds are added
-// Positions are in virtual (320x180) pixel-art canvas units
-
+// PUBLIC_INTERFACE: Array of Level objects
 const LEVELS = [
   {
     name: "1-1: The Garden Gate XL",
@@ -34,23 +50,21 @@ const LEVELS = [
       { x: 75, y: 210, w: 48, h: 12 },
       { x: 560, y: 280, w: 40, h: 8 }
     ],
-    gems: [
-      // place gems exactly centered atop platform surfaces
-      // platform @ { x:75, y:210, w:48, h:12 }
-      { x: 75 + 48 / 2, y: 210 - 6, collected: false },
-      // platform @ { x:175, y:270, w:84, h:16 }
-      { x: 175 + 84 / 2, y: 270 - 6, collected: false },
-      // platform @ { x:560, y:280, w:40, h:8 }
-      { x: 560 + 40 / 2, y: 280 - 6, collected: false },
-      // platform @ { x:390, y:205, w:70, h:16 }
-      { x: 390 + 70 / 2, y: 205 - 6, collected: false }
-    ],
+    gems: gemsForPlatforms(
+      [
+        { x: 0, y: 320, w: 640, h: 40 },
+        { x: 175, y: 270, w: 84, h: 16 },
+        { x: 390, y: 205, w: 70, h: 16 },
+        { x: 440, y: 320, w: 90, h: 20 },
+        { x: 75, y: 210, w: 48, h: 12 },
+        { x: 560, y: 280, w: 40, h: 8 }
+      ]
+      // No manual ground gems
+    ),
     exit: { x: 601, y: 290, w: 24, h: 40 },
     enemies: [
-      // Patrolling walker
       { type: "walker", x: 355, y: 305, dir: 1, patrolMin: 180, patrolMax: 470, speed: 65 },
-      // Chaser (pursues in range)
-      { type: "chaser", x: 82, y: 305, speed: 71, activeRange: 180 },
+      { type: "chaser", x: 82, y: 305, speed: 71, activeRange: 180 }
     ],
     extra: {}
   },
@@ -68,23 +82,29 @@ const LEVELS = [
       { x: 28, y: 160, w: 41, h: 18 },
       { x: 600, y: 100, w: 34, h: 12 }
     ],
-    gems: [
-      // Centered atop platforms
-      // platform @ { x:149, y:215, w:80, h:17 }
-      { x: 149 + 80 / 2, y: 215 - 6, collected: false },
-      // platform @ { x:540, y:220, w:70, h:16 }
-      { x: 540 + 70 / 2, y: 220 - 6, collected: false },
-      // ground/platform @ { x:610, y:320 } (last segment of ground)
-      { x: 610 + 15, y: 320 - 6, collected: false },
-      // platform @ { x:260, y:170, w:50,h:16 }
-      { x: 260 + 50 / 2, y: 170 - 6, collected: false }
-    ],
+    gems: gemsForPlatforms(
+      [
+        { x: 0, y: 320, w: 370, h: 40 },
+        { x: 420, y: 270, w: 160, h: 20 },
+        { x: 540, y: 220, w: 70, h: 16 },
+        { x: 149, y: 215, w: 80, h: 17 },
+        { x: 260, y: 170, w: 50, h: 16 },
+        { x: 28, y: 160, w: 41, h: 18 },
+        { x: 600, y: 100, w: 34, h: 12 }
+      ],
+      {
+        // Add a manual ground gem at far right of ground segment
+        manualGroundGems: [
+          { x: 610 + 15, y: 320 - 6, collected: false }
+        ]
+      }
+    ),
     exit: { x: 610, y: 95, w: 22, h: 40 },
     enemies: [
       { type: "walker", x: 438, y: 295, dir: -1, patrolMin: 370, patrolMax: 590, speed: 68 },
       { type: "hopper", x: 190, y: 200, dir: 1, jumpCooldown: 1.3, jumpTimer: 0, jumpVy: -195 },
       { type: "projectile", x: 38, y: 143, dir: 1, cooldown: 2.3, t: 0 },
-      { type: "chaser", x: 597, y: 123, speed: 82, activeRange: 210 },
+      { type: "chaser", x: 597, y: 123, speed: 82, activeRange: 210 }
     ],
     extra: {}
   },
@@ -101,25 +121,22 @@ const LEVELS = [
       { x: 370, y: 180, w: 51, h: 16 },
       { x: 110, y: 156, w: 62, h: 16 }
     ],
-    gems: [
-      // platform @ {x:300, y:256, w:180, h:22 }
-      { x: 300 + 180 / 2, y: 256 - 6, collected: false },
-      // platform @ {x:370, y:180, w:51, h:16 }
-      { x: 370 + 51 / 2, y: 180 - 6, collected: false },
-      // platform @ {x:536, y:228, w:95, h:22 }
-      { x: 536 + 95 / 2, y: 228 - 6, collected: false },
-      // platform @ {x:85, y:260, w:76, h:22 }
-      { x: 85 + 76 / 2, y: 260 - 6, collected: false }
-    ],
+    gems: gemsForPlatforms(
+      [
+        { x: 0, y: 320, w: 640, h: 40 },
+        { x: 85, y: 260, w: 76, h: 22 },
+        { x: 300, y: 256, w: 180, h: 22 },
+        { x: 536, y: 228, w: 95, h: 22 },
+        { x: 370, y: 180, w: 51, h: 16 },
+        { x: 110, y: 156, w: 62, h: 16 }
+      ]
+      // No manual ground gems
+    ),
     exit: { x: 25, y: 285, w: 24, h: 38 },
     enemies: [
-      // Patroller
       { type: "walker", x: 474, y: 305, dir: -1, patrolMin: 95, patrolMax: 520, speed: 74 },
-      // Jumping enemy, mid floating platform
       { type: "hopper", x: 260, y: 240, dir: 1, jumpCooldown: 1.3, jumpTimer: 0, jumpVy: -212 },
-      // Chaser, high left
       { type: "chaser", x: 135, y: 145, speed: 73, activeRange: 250 },
-      // Projectile thrower
       { type: "projectile", x: 570, y: 215, dir: -1, cooldown: 2.8, t: 0 }
     ],
     extra: {}
