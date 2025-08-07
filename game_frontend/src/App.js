@@ -411,65 +411,99 @@ function App() {
       setEnemies(nextEnemies);
 
       // --- PLATFORM/GROUND COLLISION (robust flush logic using Physics.js) ---
-      let isOnGround = false;
-      let standPlatform = isPlayerOnAnyPlatform(
-        p.x,
-        p.y,
-        PLAYER_W,
-        PLAYER_H,
-        L.platforms,
-        true // flush, strict
-      );
-      if (standPlatform && p.vy >= 0) {
-        // Snap to platform
-        p.y = standPlatform.y - PLAYER_H;
-        p.vy = 0;
-        isOnGround = true;
-      }
 
-      // Horizontal wall collision: prevent wall clipping via AABB after vertical snap
-      for (let pl of L.platforms) {
-        // Only if inside platform vertically, check x overlap
-        if (
-          p.y + PLAYER_H > pl.y + 2 &&
-          p.y < pl.y + pl.h - 2 &&
-          (p.x + PLAYER_W) > pl.x &&
-          p.x < (pl.x + pl.w)
-        ) {
-          if (p.vx > 0) p.x = Math.min(p.x, pl.x - PLAYER_W - 0.01);
-          if (p.vx < 0) p.x = Math.max(p.x, pl.x + pl.w + 0.01);
-        }
-      }
+      // --- MOVEMENT/POSITION UPDATE WITH ANTI-TUNNEL LOGIC ---
+      // Save the player's previous position for tunneling checks
+      let startY = p.y;
+      let startX = p.x;
 
-      // --- Movement controls, physics, and triple jump logic ---
+      // --- Movement controls, jump, and physics as pre-move ---
       if (!levelComplete && !transitionTimer && !deathTimer) {
         if (controls.current.left) p.vx = -MOVE_SPEED;
         else if (controls.current.right) p.vx = MOVE_SPEED;
         else p.vx = 0;
         p.vy += GRAVITY * dt;
 
+        // Jump logic
         if (controls.current.jumpPressed) {
-          if (isOnGround) { p.vy = JUMP_VEL; p.jumpCount = 1; isOnGround = false; }
-          else if (p.jumpCount < MAX_JUMPS) { p.vy = JUMP_VEL * 0.93; p.jumpCount += 1; }
+          // Only jump if currently grounded
+          if (p.onGround) {
+            p.vy = JUMP_VEL;
+            p.jumpCount = 1;
+            p.onGround = false;
+          } else if (p.jumpCount < MAX_JUMPS) {
+            p.vy = JUMP_VEL * 0.93;
+            p.jumpCount += 1;
+          }
         }
         controls.current.jumpPressed = false;
+
+        // --- X movement step ---
         p.x += p.vx * dt;
-        p.y += p.vy * dt;
         if (p.x < 0) p.x = 0;
         if (p.x > GAME_WIDTH - PLAYER_W) p.x = GAME_WIDTH - PLAYER_W;
+
+        // --- Y movement step with anti-tunnel/overshoot platform fix ---
+        let attemptedY = p.y + p.vy * dt;
+
+        // Check for all possible platforms underneath in vertical path: robust anti-tunneling
+        let bestSnap = null;
+        let minDy = Infinity;
+        for (let pl of L.platforms) {
+          // Only platforms the player could possibly pass through, and only if falling down
+          if (p.vy >= 0 &&
+              p.x + PLAYER_W > pl.x + 1 &&
+              p.x < pl.x + pl.w - 1) {
+            // Find the y-location of the top of the platform
+            let platTop = pl.y;
+            // Check if the player's bbox bottom is above the platform before move, and would go below after move
+            // (So: player is crossing the top edge)
+            if (startY + PLAYER_H <= platTop && attemptedY + PLAYER_H >= platTop) {
+              let snapDy = platTop - (startY + PLAYER_H);
+              if (snapDy < minDy) {
+                minDy = snapDy;
+                bestSnap = { pl, platTop };
+              }
+            }
+          }
+        }
+        let onPlatform = false;
+        if (bestSnap) {
+          // Snap the player right on top of the highest platform crossed
+          p.y = bestSnap.platTop - PLAYER_H;
+          p.vy = 0;
+          p.onGround = true;
+          p.jumpCount = 0;
+          onPlatform = true;
+        } else {
+          // Otherwise, move normally
+          p.y = attemptedY;
+          p.onGround = false;
+        }
+
+        // --- World ground (floor) handling as a platform at bottom of screen ---
+        const WORLD_FLOOR_Y = GAME_HEIGHT - PLAYER_H;
+        if (p.y + PLAYER_H >= GAME_HEIGHT) {
+          p.y = WORLD_FLOOR_Y;
+          p.vy = 0;
+          p.onGround = true;
+          p.jumpCount = 0;
+          onPlatform = true;
+        }
+
+        if (!onPlatform && p.onGround) {
+          // Player left the platform: reset onGround
+          p.onGround = false;
+        }
         if (p.y < 0) p.y = 0;
       }
+
       if (p.y > GAME_HEIGHT + 36 && !levelComplete && !transitionTimer) {
         defeatPlayer();
         deathTimer = 1.0;
       }
-      if (p.y + PLAYER_H >= GAME_HEIGHT && !levelComplete && !transitionTimer && !isOnGround) {
-        p.y = GAME_HEIGHT - PLAYER_H;
-        p.vy = 0;
-        isOnGround = true;
-      }
-      if (isOnGround) p.jumpCount = 0;
-      p.onGround = isOnGround;
+
+      // Guarantee: player.onGround is true if standing, else false at end of frame
 
       // --- GEM pickup logic ---
       let gCollectedNow = false;
