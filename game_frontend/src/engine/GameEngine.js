@@ -5,6 +5,7 @@ import * as Physics from './Physics';
 import LEVELS from './levels';
 import { createEnemyInstance, updateEnemies } from './Enemy';
 import { VisualEffects, ParallaxBackground } from './VisualEffects';
+import slimeImg from '../assets/img/slime_modern.png';
 
 /**
  * GameEngine - Main orchestrator for multi-level loop, rendering, and simulation.
@@ -296,7 +297,7 @@ const GameEngine = ({
     // cache loaded image outside loop
     if (!ctx._modernSlimeImg) {
       ctx._modernSlimeImg = new window.Image();
-      ctx._modernSlimeImg.src = require("../assets/img/slime_modern.png");
+      ctx._modernSlimeImg.src = slimeImg; // Use the imported slime asset
       ctx._modernSlimeImgLoaded = false;
       ctx._modernSlimeImg.onload = () => { ctx._modernSlimeImgLoaded = true; };
     }
