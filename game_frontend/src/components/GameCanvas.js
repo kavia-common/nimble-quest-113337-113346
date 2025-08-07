@@ -42,17 +42,17 @@ const GameCanvas = forwardRef(({ width, height, scale = 2, onCanvasReady }, ref)
   return (
     <canvas
       ref={canvasRef}
+      className="pixel-canvas"
       tabIndex={0} // Allows keyboard focus if needed later
       width={width}
       height={height}
-      style={{
-        display: 'block',
-        margin: 'auto',
-        border: '2px solid #333',
-        background: '#181824',
-        imageRendering: 'pixelated',
-      }}
       aria-label="Pixel game canvas"
+      style={{
+        outline: "none",
+        imageRendering: "pixelated",
+        MozImageRendering: "pixelated",
+        msInterpolationMode: "nearest-neighbor"
+      }}
     />
   );
 });
