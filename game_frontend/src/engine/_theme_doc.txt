@@ -1,0 +1,14 @@
+Distinct theme settings have been added to each level in levels.js:
+- Each level now defines a theme type, background gradients, cloud palette, and overlay visual effect (e.g., snow, foliage, fog, embers, or twinkling stars).
+- Theme fields: theme (string), bgColor, sky (with gradient, cloudsPalette, type, effect), platformColor, platformAccent, overlay (type, effect, color, density).
+- App.js has been enhanced to read and render these fields per level, applying the correct background, platform color, cloud/horizon style, and themed foreground overlays for that level.
+
+Themes included:
+- Level 1: "meadow/sky", fluffy clouds, green platforms.
+- Level 2: "forest", leafy, deep green, foliage/leaves overlay.
+- Level 3: "castle/ruins", stone, fog overlay.
+- Level 4: "cave/volcano", lava tones, animated embers.
+- Level 5: "snowy", snow, ice blue platforms, animated snow overlay.
+- Level 6: "midnight/crystal", cosmic, purple/amethyst, twinkling stars.
+
+All visual effects and transitions remain in retro pixel-art style and are smooth.

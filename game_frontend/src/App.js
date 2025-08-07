@@ -340,14 +340,132 @@ function App() {
       // --- DRAWING section uses vibrant, playful overlays (see below) ---
       const ctx = canvasRef.current?.getContext("2d");
       if (ctx) {
-        // --- NEW: Render cloud layers behind everything using pixel-art clouds ---
-        if (cloudsBgRef.current) {
-          cloudsBgRef.current.draw(ctx, now / 5200); // Speed in seconds
+        // --- THEMED BACKGROUND & HORIZON ---
+        ctx.save();
+        // Gradient sky or solid
+        if (L.sky && Array.isArray(L.sky.gradient)) {
+          const gradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+          const gSteps = L.sky.gradient.length - 1;
+          L.sky.gradient.forEach((col, idx) => {
+            gradient.addColorStop(idx / gSteps, col);
+          });
+          ctx.fillStyle = gradient;
+        } else {
+          ctx.fillStyle = L.bgColor || L.bg || "#232535";
         }
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        ctx.restore();
+
+        // Clouds/horizon effects
+        if (L.sky && cloudsBgRef.current && L.sky.type !== "none") {
+          // If palette override for this level's clouds
+          const palette =
+            L.sky.cloudsPalette && Array.isArray(L.sky.cloudsPalette)
+              ? L.sky.cloudsPalette
+              : undefined;
+          if (palette && cloudsBgRef.current.palette !== palette) {
+            cloudsBgRef.current.palette = palette;
+          }
+          cloudsBgRef.current.draw(ctx, now / 5200);
+        }
+
+        // Special overlays (mist/snow/stars/foliage/embers)
+        if (L.overlay && L.overlay.effect) {
+          if (L.overlay.effect === "snowflakes") {
+            // Render falling snowflakes (pixel-style)
+            for (let s = 0; s < 18 * (L.overlay.density || 1); ++s) {
+              ctx.save();
+              const snowX = ((performance.now() * 0.08 + s * 33) % GAME_WIDTH);
+              const snowY =
+                ((performance.now() * (0.06 + (s % 3) * 0.01) + s * 57) %
+                  GAME_HEIGHT);
+              ctx.fillStyle = L.overlay.color || "#fff";
+              ctx.globalAlpha = 0.52 +
+                0.42 * Math.abs(Math.sin(s * 534.5 + now / 720));
+              ctx.fillRect(
+                Math.floor(snowX),
+                Math.floor(snowY),
+                (Math.abs(s) % 2) + 1,
+                (Math.abs(s) % 2) + 1
+              );
+              ctx.restore();
+            }
+          } else if (L.overlay.effect === "light-fog" || L.overlay.effect === "mist") {
+            // Render light fog as semi-random drifting rects
+            for (let f = 0; f < 9 * (L.overlay.density || 1); ++f) {
+              ctx.save();
+              const fogX =
+                ((performance.now() * 0.02 + f * 133) % (GAME_WIDTH + 100)) - 50;
+              const fogY =
+                ((performance.now() * (0.011 + (f % 3) * 0.004) + f * 23) %
+                  GAME_HEIGHT) - 17;
+              ctx.globalAlpha = 0.10 +
+                0.17 * Math.abs(Math.sin(f * 1.9 + now / 120));
+              ctx.fillStyle = L.overlay.color || "#bfc0d299";
+              ctx.fillRect(Math.floor(fogX), Math.floor(fogY), 65, 17);
+              ctx.restore();
+            }
+          } else if (L.overlay.effect === "animated-embers") {
+            // Embers overlay
+            for (let e = 0; e < 10 * (L.overlay.density || 1); ++e) {
+              ctx.save();
+              const emberX = ((performance.now() * 0.04 + e * 51) % GAME_WIDTH);
+              const emberY =
+                (GAME_HEIGHT -
+                  ((performance.now() *
+                    (0.12 + ((e % 3) * 0.05)) +
+                    e * 47) %
+                    (GAME_HEIGHT - 16)));
+              ctx.globalAlpha = 0.25 +
+                0.14 * Math.abs(Math.sin(e * 22.3 + now / 78));
+              ctx.fillStyle = L.overlay.color || "#ffae4c";
+              ctx.beginPath();
+              ctx.arc(
+                Math.floor(emberX),
+                Math.floor(emberY),
+                ((e % 2) ? 2 : 1),
+                0,
+                2 * Math.PI
+              );
+              ctx.fill();
+              ctx.restore();
+            }
+          } else if (L.overlay.effect === "falling-leaf" || L.overlay.effect === "foliage") {
+            // Falling leaves for forest level
+            for (let l = 0; l < 8 * (L.overlay.density || 1); ++l) {
+              ctx.save();
+              const t = now / 1100;
+              const leafX =
+                ((performance.now() * 0.10 + l * 90 + 26 * Math.sin(t + l)) %
+                  GAME_WIDTH);
+              const leafY =
+                ((performance.now() * (0.08 + (l % 3) * 0.02) + l * 29) %
+                  GAME_HEIGHT);
+              ctx.globalAlpha = 0.53 +
+                0.37 * Math.abs(Math.sin(l * 0.99 + t));
+              ctx.fillStyle = L.overlay.color || "#6ae47d";
+              ctx.fillRect(Math.floor(leafX), Math.floor(leafY), 3, (l % 2) ? 4 : 2);
+              ctx.restore();
+            }
+          } else if (L.overlay.effect === "twinkle" || L.overlay.effect === "stars") {
+            // Twinkling stars
+            for (let s = 0; s < 15 * (L.overlay.density || 1); ++s) {
+              ctx.save();
+              const starX = ((performance.now() * 0.06 + s * 83) % GAME_WIDTH);
+              const starY =
+                ((performance.now() * (0.043 + (s % 3) * 0.013) + s * 67) %
+                  GAME_HEIGHT * 0.65);
+              const br = 0.75 + 0.7 * Math.abs(Math.sin(s * 8.33 + now / 408));
+              ctx.globalAlpha = (L.overlay.density || 1) * br;
+              ctx.fillStyle = L.overlay.color || "#fffbe7";
+              ctx.fillRect(Math.floor(starX), Math.floor(starY), 2, 2);
+              ctx.restore();
+            }
+          }
+        }
+
         // Modern vibrant background (animated stripes overlay)
         ctx.save();
-        ctx.fillStyle = L.bgColor || L.bg || "#232535";
-        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         ctx.globalAlpha = 0.11;
         for (let i = 0; i < 20; i++) {
           ctx.fillStyle = ["#ffe23a44", "#2ecc7177", "#e67e2244", "#ffd70033", "#3498db33"][i % 5];
@@ -359,9 +477,9 @@ function App() {
         // Platforms
         ctx.save();
         for (let pl of L.platforms) {
-          ctx.fillStyle = "#8fd462";
+          ctx.fillStyle = L.platformColor || "#8fd462";
           ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
-          ctx.strokeStyle = "#fff880";
+          ctx.strokeStyle = L.platformAccent || "#fff880";
           ctx.lineWidth = 2;
           ctx.strokeRect(pl.x, pl.y, pl.w, pl.h);
         }

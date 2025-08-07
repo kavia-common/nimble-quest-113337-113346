@@ -36,10 +36,20 @@ function gemsForPlatforms(platforms, opts = {}) {
 }
 
 const LEVELS = [
-  // 1-1 THE GARDEN GATE XL - LOWERED for easy 3-jump access everywhere
+  // 1-1 THE GARDEN GATE XL - Theme: Sky/Meadow
   {
     name: "1-1: The Garden Gate XL",
-    bgColor: "#9ad0ec",
+    theme: "meadow",
+    bgColor: "#9ad0ec", // pale blue-sky
+    sky: {
+      gradient: ["#e3fdff", "#9ad0ec", "#38bdf8"],
+      cloudsPalette: ["#fff5ec", "#d1f0ff"],
+      type: "fluffy",
+      effect: "none"
+    },
+    platformColor: "#8fd462",    // lush green
+    platformAccent: "#618f3e",   // earthy contour
+    overlay: null,
     music: null,
     objective: "Collect fewer gems, avoid a walker and slow hopper.",
     platforms: [
@@ -65,10 +75,25 @@ const LEVELS = [
     extra: {},
   },
 
-  // 1-2 OVERGROWN RUINS XL - Platforms collapsed so each step is < triple jump distance
+  // 1-2 OVERGROWN RUINS XL - Theme: Forest/Jungle
   {
     name: "1-2: Overgrown Ruins XL",
-    bgColor: "#88c070",
+    theme: "forest",
+    bgColor: "#295c2c",  // deep dark green for forest shade
+    sky: {
+      gradient: ["#445e37", "#347355", "#88c070"],
+      cloudsPalette: ["#d9f2b8", "#bcef8f"],
+      type: "leafy",
+      effect: "vine_mist"
+    },
+    platformColor: "#225626",     // moss/forest green
+    platformAccent: "#315028",
+    overlay: {
+      type: "foliage",
+      effect: "falling-leaf",
+      color: "#6ae47d",
+      density: 0.9
+    },
     music: null,
     objective: "Lower gem count. Face a walker, projectile shooter, chaser, and a hopper.",
     platforms: [
@@ -97,10 +122,25 @@ const LEVELS = [
     extra: {},
   },
 
-  // 1-3 THE OLD WALLS XL - Platforms all reachable with < triple jump
+  // 1-3 THE OLD WALLS XL - Theme: Stone/Castle/Foggy Ruins
   {
     name: "1-3: The Old Walls XL",
-    bgColor: "#707083",
+    theme: "castle",
+    bgColor: "#525264", // stone/gray backdrop
+    sky: {
+      gradient: ["#696276", "#bfc0d2", "#42405a"],
+      cloudsPalette: ["#939ca4", "#d2dee6"],
+      type: "wispy",
+      effect: "fog"
+    },
+    platformColor: "#8b8cbf",       // stone blue
+    platformAccent: "#707083",      // shadows
+    overlay: {
+      type: "mist",
+      effect: "light-fog",
+      color: "#bfc0d2cc",
+      density: 0.55
+    },
     music: null,
     objective: "Seven gems, plus walker, hopper, chaser, projectile!",
     platforms: [
@@ -129,10 +169,25 @@ const LEVELS = [
     extra: {},
   },
 
-  // 2-1 MOLTEN CAVES (NEW) - All platforms are stepwise < triple jump
+  // 2-1 MOLTEN CAVES (NEW) - Theme: Lava Caves/Volcano
   {
     name: "2-1: Molten Caves",
-    bgColor: "#772828",
+    theme: "cave",
+    bgColor: "#3c1818", // deeper lava stone bg
+    sky: {
+      gradient: ["#772828", "#3c1818", "#401815"],
+      cloudsPalette: ["#eb3535bb", "#cd4635bb", "#612828cc"],
+      type: "smoke",
+      effect: "embers"
+    },
+    platformColor: "#552818",        // dark brown rock
+    platformAccent: "#bb300c",       // lava veins/accent
+    overlay: {
+      type: "ember",
+      effect: "animated-embers",
+      color: "#ffae4c",
+      density: 0.45
+    },
     music: null,
     objective: "6 gems, hazards everywhere; multiple enemy types.",
     platforms: [
@@ -161,10 +216,25 @@ const LEVELS = [
     extra: {},
   },
 
-  // 2-2 FROSTBOUND SPIRES (RELAYERED VERTICALS for new jump balance)
+  // 2-2 FROSTBOUND SPIRES (RELAYERED VERTICALS for new jump balance) - Theme: Snowy Peaks
   {
     name: "2-2: Frostbound Spires",
-    bgColor: "#90d6ff",
+    theme: "snow",
+    bgColor: "#bffaff", // pale ice blue
+    sky: {
+      gradient: ["#e7f7ff", "#abdae7", "#90d6ff"],
+      cloudsPalette: ["#fffefd", "#d8fdff"],
+      type: "snowclouds",
+      effect: "snow"
+    },
+    platformColor: "#8fd4f8",     // icy blue
+    platformAccent: "#e4f6ff",    // snow cap
+    overlay: {
+      type: "snow",
+      effect: "snowflakes",
+      color: "#fff",
+      density: 0.85
+    },
     music: null,
     objective: "More enemies for frosty challenge, fewer gems.",
     platforms: [
@@ -195,10 +265,25 @@ const LEVELS = [
     extra: {},
   },
 
-  // 2-3 CRYSTAL MIDNIGHT (RETOOLED for easy traverse with triple jump)
+  // 2-3 CRYSTAL MIDNIGHT (RETOOLED for easy traverse with triple jump) - Theme: Night/Crystal/Midnight
   {
     name: "2-3: Crystal Midnight",
-    bgColor: "#343355",
+    theme: "midnight",
+    bgColor: "#251034", // deep purple night
+    sky: {
+      gradient: ["#3b275a", "#343355", "#1a1942"],
+      cloudsPalette: ["#c6b2ff", "#d9efff"],
+      type: "cosmic",
+      effect: "stars"
+    },
+    platformColor: "#964cf2",        // amethyst
+    platformAccent: "#37e2f2",       // crystal edge
+    overlay: {
+      type: "stars",
+      effect: "twinkle",
+      color: "#fffbe7",
+      density: 0.19
+    },
     music: null,
     objective: "Fewer gems, high enemy count and diversity.",
     platforms: [
