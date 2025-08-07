@@ -26,7 +26,20 @@ function App() {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
   };
 
-  // Stubs for navigation actions
+  // PUBLIC_INTERFACE
+  // Navigation/progression handlers
+  const handleStartGame = () => {
+    setScreen('game');
+  };
+
+  const handleShowLevelSelect = () => {
+    setScreen('levelselect');
+  };
+
+  const handleReturnToMenu = () => {
+    setScreen('menu');
+  };
+
   const showOverlay = o => setOverlay(o);
   const closeOverlay = () => setOverlay(null);
 
@@ -39,12 +52,21 @@ function App() {
       >
         {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
       </button>
-      <GameLayout>
+      <GameLayout screen={screen}>
         {screen === 'menu' && (
-          <MainMenu />
+          <MainMenu
+            onStartGame={handleStartGame}
+            onShowSettings={() => showOverlay('settings')}
+            onShowAchievements={() => showOverlay('achievements')}
+            onShowLeaderboards={() => showOverlay('leaderboards')}
+            onShowLevelSelect={handleShowLevelSelect}
+          />
         )}
         {screen === 'levelselect' && (
-          <LevelSelect />
+          <LevelSelect
+            onBack={handleReturnToMenu}
+            // Future: add onSelectLevel
+          />
         )}
         {screen === 'game' && (
           <>
@@ -54,13 +76,13 @@ function App() {
         )}
         {/* Overlay Stubs: Show only when overlay state is set */}
         {overlay === 'settings' && (
-          <SettingsOverlay />
+          <SettingsOverlay onClose={closeOverlay} />
         )}
         {overlay === 'achievements' && (
-          <AchievementsOverlay />
+          <AchievementsOverlay onClose={closeOverlay} />
         )}
         {overlay === 'leaderboards' && (
-          <LeaderboardsOverlay />
+          <LeaderboardsOverlay onClose={closeOverlay} />
         )}
       </GameLayout>
     </div>

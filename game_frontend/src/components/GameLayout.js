@@ -6,9 +6,8 @@ import React from 'react';
  * Handles showing overlays and menus.
  */
 // PUBLIC_INTERFACE
-const GameLayout = ({ children }) => (
+const GameLayout = ({ children, screen }) => (
   <div className="game-layout">
-    {/* TODO: Add responsive layout logic and style */}
     {children}
   </div>
 );
