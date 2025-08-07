@@ -27,9 +27,7 @@ const LEVELS = [
     music: null,
     objective: "Collect all gems & reach the exit",
     platforms: [
-      // ground
       { x: 0, y: 160, w: 320, h: 20 },
-      // block
       { x: 100, y: 124, w: 32, h: 10 },
       { x: 195, y: 105, w: 22, h: 10 },
       { x: 220, y: 90, w: 22, h: 10 },
@@ -40,7 +38,9 @@ const LEVELS = [
     ],
     exit: { x: 292, y: 140, w: 12, h: 20 },
     enemies: [
+      // Patrolling walker
       { type: "walker", x: 175, y: 151, dir: 1, patrolMin: 175, patrolMax: 270, speed: 35 },
+      // Chaser (pursues in range, not on high ledges)
       { type: "chaser", x: 45, y: 151, speed: 42, activeRange: 80 },
     ],
     extra: {}
@@ -65,9 +65,13 @@ const LEVELS = [
     ],
     exit: { x: 300, y: 90, w: 12, h: 20 },
     enemies: [
+      // Patrolling walker
       { type: "walker", x: 220, y: 151, dir: -1, patrolMin: 120, patrolMax: 260, speed: 37 },
-      { type: "hopper", x: 90, y: 103, dir: 1, jumpCooldown: 1.3, jumpTimer: 0, jumpVy: -105 }, // classic frog enemy
-      { type: "projectile", x: 24, y: 76, dir: 1, cooldown: 2.5, t: 0 }, // shoots at intervals
+      // Jumping enemy (hops left/right on platform)
+      { type: "hopper", x: 90, y: 103, dir: 1, jumpCooldown: 1.3, jumpTimer: 0, jumpVy: -105 }, // frog
+      // Projectile thrower (left side, top platform)
+      { type: "projectile", x: 24, y: 76, dir: 1, cooldown: 2.5, t: 0 }, // throws at intervals
+      // Chaser (upper right platform)
       { type: "chaser", x: 150, y: 77, speed: 56, activeRange: 120 },
     ],
     extra: {}
@@ -92,9 +96,13 @@ const LEVELS = [
     ],
     exit: { x: 10, y: 140, w: 12, h: 20 },
     enemies: [
+      // Patroller
       { type: "walker", x: 290, y: 151, dir: -1, patrolMin: 35, patrolMax: 292, speed: 38 },
+      // Jumping enemy, mid floating platform
       { type: "hopper", x: 134, y: 118, dir: 1, jumpCooldown: 1.0, jumpTimer: 0, jumpVy: -125 },
+      // Chaser, high left starts on upper ledge
       { type: "chaser", x: 65, y: 71, speed: 40, activeRange: 140 },
+      // Projectile thrower
       { type: "projectile", x: 240, y: 123, dir: -1, cooldown: 3.5, t: 0 }
     ],
     extra: {}

@@ -241,27 +241,36 @@ const GameEngine = () => {
   }
 
   // --- ENEMY LOGIC/RENDER STATE ---
+  // Expanded enemies system: walker (patrol), chaser (AI pursue), hopper (jumping), projectile-shooter
   const [enemiesState, setEnemiesState] = useState([]);
-  // Projectiles from projectile-throwers (cause defeat to player)
+  // Projectiles from projectile-throwers
   const [projectiles, setProjectiles] = useState([]);
 
-  // When level changes, parse and initialize enemyState to a deep copy of level static data
+  // Initialize enemy state per-level, with proper state for each enemy type
   useEffect(() => {
     if (!LEVELS[levelIdx]) return;
-    setEnemiesState(LEVELS[levelIdx].enemies.map(e => ({ ...e })));
+    // For deep stateful cloning: always reset timers, vy, onGround, etc.
+    setEnemiesState(
+      LEVELS[levelIdx].enemies.map(e => ({
+        ...e,
+        vy: 0,
+        onGround: false,
+        jumpTimer: e.jumpTimer ?? 0,
+        t: e.t ?? 0,
+      }))
+    );
     setProjectiles([]);
   }, [levelIdx]);
 
-  // Main game/animation loop -- handles per-level render and logic
+  // Main game/animation loop -- all logic for AI, player, collisions, rendering
   useEffect(() => {
     let running = true;
     let lastTime = performance.now();
-    let defeatTime = 0;
-    let defeatFlash = false;
     let defeatTimeoutHandle = null;
+    let defeatFlash = false;
 
     function defeatPlayer() {
-      if (defeatTimeoutHandle) return; // Already in defeat sequence
+      if (defeatTimeoutHandle) return;
       defeatFlash = true;
       setLevelState(ls => ({
         ...ls,
@@ -269,14 +278,14 @@ const GameEngine = () => {
         message: "Defeated! Restarting level..."
       }));
       defeatTimeoutHandle = setTimeout(() => {
-        setLevelIdx(idx => idx); // force re-mount/restart
+        setLevelIdx(idx => idx);
       }, 1600);
     }
 
     function frame() {
       if (!running) return;
-      if (!LEVELS[levelIdx]) return; // level bounds check
-      if (levelState.transitioning) return; // pause during message
+      if (!LEVELS[levelIdx]) return;
+      if (levelState.transitioning) return;
 
       const now = performance.now();
       let dt = (now - lastTime) / 1000;
@@ -287,29 +296,29 @@ const GameEngine = () => {
       const controls = controlsRef.current;
       const player = playerRef.current;
 
-      // -- ENEMY AI UPDATE --
+      // --- ENEMY AI UPDATE & PROJECTILES ---
+      // Deep-clone for stateful update
       let newEnemies = enemiesState.map(en => ({ ...en }));
       let newProjectiles = projectiles.map(p => ({ ...p }));
 
       for (let en of newEnemies) {
+        // PATROLLER/WALKER: Moves back and forth horizontally between patrolMin/patrolMax
         if (en.type === "walker") {
-          // Patrolling enemy. Inherits "dir" state.
           en.x += en.dir * (en.speed ?? 36) * dt;
-          // Reverse at patrol bounds
           en.x = clamp(en.x, en.patrolMin ?? 0, en.patrolMax ?? GAME_WIDTH - 14);
           if ((en.dir === 1 && en.x >= (en.patrolMax ?? GAME_WIDTH - 14)) ||
               (en.dir === -1 && en.x <= (en.patrolMin ?? 0))) en.dir *= -1;
         }
+        // HOPPER (JUMPING ENEMY): Jump when timer runs out, changes direction, simple platform ground logic
         else if (en.type === "hopper") {
-          // Hopper logic: jump with cooldown, simple platform support
-          if (typeof en.jumpTimer === "undefined") en.jumpTimer = 0;
+          // Timer ticks down
           en.jumpTimer -= dt;
+          // Basic gravity if in air
           if (!en.vy) en.vy = 0;
           if (!en.onGround) en.vy += 440 * dt;
-          let nextY = en.y + (en.vy ?? 0) * dt;
-          // hanging in air or falling
+          let nextY = en.y + en.vy * dt;
           let grounded = false;
-          // Find platform beneath
+          // Platform/platforms collision only below (landing)
           for (let pl of curLevel.platforms) {
             if (
               en.x + 11 > pl.x &&
@@ -324,7 +333,7 @@ const GameEngine = () => {
               break;
             }
           }
-          // Ground fallback
+          // World ground (bottom edge)
           if (nextY + 13 > GAME_HEIGHT - 20) {
             grounded = true;
             nextY = GAME_HEIGHT - 20 - 13;
@@ -333,56 +342,56 @@ const GameEngine = () => {
           en.onGround = grounded;
           en.y = nextY;
 
-          // Hop
+          // When grounded and timer expired, jump and reverse direction
           if (en.onGround && en.jumpTimer <= 0) {
             en.vy = en.jumpVy || -110;
-            en.dir *= -1; // reverse direction
+            en.dir *= -1;
             en.jumpTimer = en.jumpCooldown || 1.3;
             en.x += en.dir * 12;
-            // Clamp to stage
             en.x = clamp(en.x, 0, GAME_WIDTH-12);
-          } else if (!en.onGround) { 
+          } else if (!en.onGround) {
             en.x += en.dir * 44 * dt;
             en.x = clamp(en.x, 0, GAME_WIDTH-12);
           }
         }
+        // CHASER (PURSUER): Moves toward player if within horizontal range + similar vertical level
         else if (en.type === "chaser") {
-          // Simple AI: move toward player only if within range and roughly same y
           let dx = player.x - en.x;
-          let dy = Math.abs((player.y) - (en.y));
+          let dy = Math.abs(player.y - en.y);
           if (Math.abs(dx) < (en.activeRange ?? 90) && dy < 30) {
             en.x += Math.sign(dx) * (en.speed ?? 52) * dt;
             en.x = clamp(en.x, 0, GAME_WIDTH-14);
           }
         }
+        // PROJECTILE-SHOOTING ENEMY: Fires projectiles at intervals in its dir
         else if (en.type === "projectile") {
           en.t = en.t ? en.t + dt : dt;
           if (!en.cooldown) en.cooldown = 2.5;
           if (en.t >= en.cooldown) {
-            // Fire a projectile
             newProjectiles.push({
-              x: en.x+7, // center of thrower
+              x: en.x+7,
               y: en.y+10,
               vx: (en.dir??1) * 110,
               vy: 0,
               t: 0
             });
-            en.t = 0; // reset timer
+            en.t = 0;
           }
         }
       }
-      // Update projectiles: move, remove out of bounds
+
+      // Move projectiles, remove out-of-bounds
       for (let i = 0; i < newProjectiles.length; ++i) {
         let p = newProjectiles[i];
         p.x += p.vx * dt;
-        p.y += (p.vy??0) * dt;
+        p.y += (p.vy ?? 0) * dt;
       }
       newProjectiles = newProjectiles.filter(p => p.x > -10 && p.x < GAME_WIDTH+10);
 
       setEnemiesState(newEnemies);
       setProjectiles(newProjectiles);
 
-      // Update player with per-level ground/platform collision
+      // PLAYER UPDATE (including platform collision)
       player.update(
         dt,
         {
@@ -425,13 +434,13 @@ const GameEngine = () => {
         setForceRerender
       );
 
-      // PLAYER - ENEMY COLLISION
+      // ENEMY & PROJECTILE COLLISION with player
+      // (If player collides with any enemy or projectile, defeat)
       let px = player.x, py = player.y, pw = 12, ph = 14;
       if (!levelState.completed && !levelState.transitioning) {
         for (let en of newEnemies) {
           let ew = (en.type === "hopper") ? 12 : 14;
           let eh = (en.type === "hopper") ? 13 : 12;
-          // Projectiles are checked separately
           if (["walker", "hopper", "chaser"].includes(en.type)
             && rectsOverlap(px, py, pw, ph, en.x, en.y, ew, eh)) {
             defeatPlayer();
@@ -446,7 +455,7 @@ const GameEngine = () => {
         }
       }
 
-      // Render everything
+      // --- RENDERING ---
       const ctx = canvasRef.current?.getContext();
       if (ctx) {
         // defeat flash effect
@@ -463,7 +472,7 @@ const GameEngine = () => {
         // Draw player (after enemies for "in front" effect)
         player.draw(ctx);
 
-        // Draw current level name label
+        // Draw meta labels
         ctx.save();
         ctx.font = "bold 13px 'Press Start 2P', monospace";
         ctx.fillStyle = "#fffd";
@@ -499,7 +508,6 @@ const GameEngine = () => {
       running = false;
       if (defeatTimeoutHandle) clearTimeout(defeatTimeoutHandle);
     };
-    // include levelIdx and levelState as deps so changes force new effect/memory
     // eslint-disable-next-line
   }, [levelIdx, levelState.transitioning]);
 
