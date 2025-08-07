@@ -6,6 +6,7 @@ import {
   isCollidingWithAnyPlatform,
   rectsOverlap as physicsRectsOverlap
 } from "./engine/Physics";
+import CloudsBackground from "./engine/CloudsBackground";
 
 // --- Constants ---
 const GAME_WIDTH = 640;
@@ -49,6 +50,8 @@ function circleRectOverlap(cx, cy, r, rx, ry, rw, rh) {
  */
 function App() {
   const canvasRef = useRef(null);
+  // Clouds BG utility: instantiate once per component for performance
+  const cloudsBgRef = useRef(null);
 
   // --- Game state machine ---
   const [gameState, setGameState] = useState("MENU");
@@ -264,6 +267,13 @@ function App() {
 
   // --- Modern vibrant game loop/render updates the visuals are handled in canvas logic
 
+  // Initialize cloudsBgRef when canvas mounts or dimensions change
+  useEffect(() => {
+    if (!cloudsBgRef.current && canvasRef.current) {
+      cloudsBgRef.current = new CloudsBackground(GAME_WIDTH, GAME_HEIGHT);
+    }
+  }, [canvasRef]);
+
   useEffect(() => {
     let running = true;
     let lastTime = performance.now();
@@ -328,9 +338,12 @@ function App() {
       // (Code continues — draw with vibrant UI, playful overlays, HUD...)
 
       // --- DRAWING section uses vibrant, playful overlays (see below) ---
-
       const ctx = canvasRef.current?.getContext("2d");
       if (ctx) {
+        // --- NEW: Render cloud layers behind everything using pixel-art clouds ---
+        if (cloudsBgRef.current) {
+          cloudsBgRef.current.draw(ctx, now / 5200); // Speed in seconds
+        }
         // Modern vibrant background (animated stripes overlay)
         ctx.save();
         ctx.fillStyle = L.bgColor || L.bg || "#232535";
@@ -501,6 +514,8 @@ function App() {
 
   if (gameState === "MENU") {
     // --- START MENU: Energetic pixel-art style, big buttons, rich color ---
+
+    // --- Add clouds background to menu ---
     return (
       <div
         className="App"
@@ -511,9 +526,46 @@ function App() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          fontFamily: "'Press Start 2P', monospace"
+          fontFamily: "'Press Start 2P', monospace",
+          position: "relative",
+          overflow: "hidden"
         }}
       >
+        {/* Clouds canvas in BG for menu (optional: render onto a dedicated <canvas> for perf) */}
+        <div style={{
+          position: "absolute", left: 0, top: 0, width: "100vw", height: "100vh", zIndex: 0, pointerEvents: "none", overflow: "hidden"
+        }}>
+          <canvas
+            width={GAME_WIDTH}
+            height={GAME_HEIGHT}
+            style={{
+              width: "100vw",
+              height: "100vh",
+              imageRendering: "pixelated",
+              display: "block",
+              filter: "blur(.2px)",
+              opacity: 0.97
+            }}
+            ref={el => {
+              if (el && !el._cloudsBgMenu) {
+                el._cloudsBgMenu = new CloudsBackground(GAME_WIDTH, GAME_HEIGHT);
+              }
+              if (el && el._cloudsBgMenu) {
+                // Animate clouds for menu
+                let running = true;
+                function renderCloudMenuFrame() {
+                  if (!running) return;
+                  const ctx = el.getContext("2d");
+                  ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                  el._cloudsBgMenu.draw(ctx, performance.now() / 5200);
+                  requestAnimationFrame(renderCloudMenuFrame);
+                }
+                renderCloudMenuFrame();
+                el._cleanupClouds = () => { running = false; };
+              }
+            }}
+          />
+        </div>
         <VibrantBorderBox>
           <div style={{
             display: "flex", justifyContent: "center", alignItems: "center",
@@ -628,9 +680,37 @@ function App() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center"
+          justifyContent: "center",
+          position: "relative",
+          overflow: "hidden"
         }}
       >
+        <div style={{
+          position: "absolute", left: 0, top: 0, width: "100vw", height: "100vh", zIndex: 0, pointerEvents: "none", overflow: "hidden"
+        }}>
+          <canvas
+            width={GAME_WIDTH}
+            height={GAME_HEIGHT}
+            style={{
+              width: "100vw", height: "100vh", imageRendering: "pixelated", display: "block", filter: "blur(.19px)", opacity: 0.89
+            }}
+            ref={el => {
+              if (el && !el._cloudsBgWin) el._cloudsBgWin = new CloudsBackground(GAME_WIDTH, GAME_HEIGHT);
+              if (el && el._cloudsBgWin) {
+                let running = true;
+                function renderFrameWin() {
+                  if (!running) return;
+                  const ctx = el.getContext("2d");
+                  ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                  el._cloudsBgWin.draw(ctx, performance.now() / 5200);
+                  requestAnimationFrame(renderFrameWin);
+                }
+                renderFrameWin();
+                el._cleanupClouds = () => { running = false; };
+              }
+            }}
+          />
+        </div>
         <VibrantBorderBox maxWidth={470} style={{ background: "linear-gradient(117deg, #2ecc71 65%, #26dcd1 100%)", borderColor: "#ffd700", outline: "4px solid #e87a41" }}>
           <h2
             className="px-title"
@@ -695,9 +775,37 @@ function App() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center"
+          justifyContent: "center",
+          position: "relative",
+          overflow: "hidden"
         }}
       >
+        <div style={{
+          position: "absolute", left: 0, top: 0, width: "100vw", height: "100vh", zIndex: 0, pointerEvents: "none", overflow: "hidden"
+        }}>
+          <canvas
+            width={GAME_WIDTH}
+            height={GAME_HEIGHT}
+            style={{
+              width: "100vw", height: "100vh", imageRendering: "pixelated", display: "block", filter: "blur(.19px)", opacity: 0.89
+            }}
+            ref={el => {
+              if (el && !el._cloudsBgLose) el._cloudsBgLose = new CloudsBackground(GAME_WIDTH, GAME_HEIGHT);
+              if (el && el._cloudsBgLose) {
+                let running = true;
+                function renderFrameLose() {
+                  if (!running) return;
+                  const ctx = el.getContext("2d");
+                  ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                  el._cloudsBgLose.draw(ctx, performance.now() / 5200);
+                  requestAnimationFrame(renderFrameLose);
+                }
+                renderFrameLose();
+                el._cleanupClouds = () => { running = false; };
+              }
+            }}
+          />
+        </div>
         <VibrantBorderBox maxWidth={445} style={{ background: "linear-gradient(117deg, #ff7e78 59%, #181824 100%)", borderColor: "#b8001e", outline: "3.5px solid #ffd700" }}>
           <h2
             className="px-title"
