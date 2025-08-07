@@ -1,201 +1,237 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import './App.css';
+import React, { useRef, useEffect } from "react";
+import "./App.css";
 
-import GameLayout from './components/GameLayout';
-import MainMenu from './components/MainMenu';
-import LevelSelect from './components/LevelSelect';
-import HUD from './components/HUD';
-import SettingsOverlay from './components/SettingsOverlay';
-import AchievementsOverlay from './components/AchievementsOverlay';
-import LeaderboardsOverlay from './components/LeaderboardsOverlay';
-import GameEngine from './engine/GameEngine';
+/**
+ * Minimal pixel-art platformer React app.
+ * Single canvas, keyboard controls, core platform physics.
+ * No menus, overlays, HUD, or extra UI.
+ */
+
+// Game constants
+const GAME_WIDTH = 320;
+const GAME_HEIGHT = 180;
+const PIXEL_SCALE = 2;
+const PLAYER_WIDTH = 12;
+const PLAYER_HEIGHT = 14;
+const GROUND_HEIGHT = 40;
+const MOVE_SPEED = 90;
+const JUMP_VELOCITY = -195;
+const GRAVITY = 650;
+
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
 
 // PUBLIC_INTERFACE
-/**
- * App - Main entry for pixel-art platformer. Handles top-level state and screen orchestration.
- * - Robust against crash: all state paths validated, errors caught.
- * - Fully extensible for new overlays, screens, and integration hooks.
- */
 function App() {
-  const [theme, setTheme] = useState('light');
-  const [overlay, setOverlay] = useState(null); // 'settings', 'achievements', 'leaderboards', etc.
-  const [screen, setScreen] = useState('menu'); // 'menu', 'levelselect', 'game'
+  const canvasRef = useRef(null);
 
-  // Persistent game state for progress & scoring
-  const [score, setScore] = useState(0);
-  const [lives, setLives] = useState(3);
-  const [gems, setGems] = useState(0);
-  const [maxGems, setMaxGems] = useState(0);
-  const [currentLevel, setCurrentLevel] = useState(0);
+  // Player state
+  const player = useRef({
+    x: 24,
+    y: GAME_HEIGHT - GROUND_HEIGHT - PLAYER_HEIGHT,
+    vx: 0,
+    vy: 0,
+    onGround: false
+  });
 
-  // Gameflow overlays: e.g. game over, level complete, all complete
-  const [gameFlowOverlay, setGameFlowOverlay] = useState(null);
-  const [gameOverlayMessage, setGameOverlayMessage] = useState("");
+  // Keyboard state (arrows, WASD, space)
+  const controls = useRef({
+    left: false,
+    right: false,
+    jumpPressed: false,
+    jump: false
+  });
 
-  // Crash-safe: all effect hooks are wrapped
+  // Keyboard event handlers - minimal only
   useEffect(() => {
-    try {
-      document.documentElement.setAttribute('data-theme', theme);
-    } catch (e) {
-      // Ignore theme change error for robustness.
+    function handleKeyDown(e) {
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") controls.current.left = true;
+      if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") controls.current.right = true;
+      if ([" ", "Spacebar", "w", "W", "ArrowUp"].includes(e.key)) {
+        // Buffer jump (single shot)
+        if (!controls.current.jump) controls.current.jumpPressed = true;
+        controls.current.jump = true;
+      }
     }
-  }, [theme]);
-
-  // PUBLIC_INTERFACE
-  const toggleTheme = useCallback(() => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    function handleKeyUp(e) {
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") controls.current.left = false;
+      if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") controls.current.right = false;
+      if ([" ", "Spacebar", "w", "W", "ArrowUp"].includes(e.key)) {
+        controls.current.jump = false;
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
   }, []);
 
-  // PUBLIC_INTERFACE - Main menu flow handlers
-  const handleStartGame = useCallback(() => {
-    setScore(0);
-    setLives(3);
-    setGems(0);
-    setMaxGems(0);
-    setCurrentLevel(0);
-    setGameFlowOverlay(null);
-    setGameOverlayMessage("");
-    setScreen('game');
-  }, []);
-  const handleShowLevelSelect = useCallback(() => setScreen('levelselect'), []);
-  const handleReturnToMenu = useCallback(() => {
-    setScreen('menu');
-    setGameFlowOverlay(null);
-    setOverlay(null);
-  }, []);
-  const showOverlay = useCallback((o) => setOverlay(o), []);
-  const closeOverlay = useCallback(() => setOverlay(null), []);
+  // Main game loop
+  useEffect(() => {
+    let running = true;
+    let lastTime = performance.now();
 
-  // Updates from GameEngine
-  const handleGameStateUpdate = useCallback(
-    ({ score: nextScore, lives: nextLives, gems: nextGems, maxGems: nextMaxGems, level: nextLevel }) => {
-      setScore(typeof nextScore === "number" ? nextScore : 0);
-      setLives(typeof nextLives === "number" ? nextLives : 0);
-      setGems(typeof nextGems === "number" ? nextGems : 0);
-      setMaxGems(typeof nextMaxGems === "number" ? nextMaxGems : 0);
-      setCurrentLevel(typeof nextLevel === "number" ? nextLevel : 0);
-    }, []);
+    function frame() {
+      if (!running) return;
+      const now = performance.now();
+      const dt = clamp((now - lastTime) / 1000, 0, 0.045);
+      lastTime = now;
 
-  // GameFlow event handlers (robust: safe checks)
-  const handleGameOver = useCallback(() => {
-    setGameFlowOverlay('gameover');
-    setGameOverlayMessage("Game Over");
+      // --- Update player physics ---
+      const p = player.current;
+      // Move left/right
+      if (controls.current.left) {
+        p.vx = -MOVE_SPEED;
+      } else if (controls.current.right) {
+        p.vx = MOVE_SPEED;
+      } else {
+        p.vx = 0;
+      }
+
+      // Gravity
+      p.vy += GRAVITY * dt;
+
+      // Jump (if on ground)
+      if (controls.current.jumpPressed && p.onGround) {
+        p.vy = JUMP_VELOCITY;
+        p.onGround = false;
+      }
+      controls.current.jumpPressed = false;
+
+      // Integrate position
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+
+      // Collide with ground
+      let groundY = GAME_HEIGHT - GROUND_HEIGHT;
+      if (p.y + PLAYER_HEIGHT >= groundY) {
+        p.y = groundY - PLAYER_HEIGHT;
+        p.vy = 0;
+        p.onGround = true;
+      } else {
+        p.onGround = false;
+      }
+
+      // Collide with world edges
+      if (p.x < 0) p.x = 0;
+      if (p.x > GAME_WIDTH - PLAYER_WIDTH) p.x = GAME_WIDTH - PLAYER_WIDTH;
+      if (p.y < 0) p.y = 0;
+
+      // --- Draw ---
+      const ctx = canvasRef.current?.getContext("2d");
+      if (ctx) {
+        // Background
+        ctx.save();
+        ctx.fillStyle = "#232535";
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        ctx.restore();
+
+        // Platform ground (draw as blocks, pixel-art style)
+        ctx.save();
+        ctx.fillStyle = "#8fd462";
+        ctx.fillRect(0, GAME_HEIGHT - GROUND_HEIGHT, GAME_WIDTH, GROUND_HEIGHT);
+        ctx.strokeStyle = "#fff880";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0, GAME_HEIGHT - GROUND_HEIGHT, GAME_WIDTH, GROUND_HEIGHT);
+
+        // Draw additional simple floating platforms for basic proto level (optional: for demo)
+        ctx.fillStyle = "#bbed98";
+        ctx.fillRect(85, 130, 48, 8);
+        ctx.strokeRect(85, 130, 48, 8);
+        ctx.fillRect(200, 95, 35, 8);
+        ctx.strokeRect(200, 95, 35, 8);
+        ctx.restore();
+
+        // --- Player (block pixel guy) ---
+        ctx.save();
+        ctx.fillStyle = "#ffd700";
+        ctx.fillRect(Math.floor(p.x), Math.floor(p.y), PLAYER_WIDTH, PLAYER_HEIGHT);
+        // Shadow
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = "#111";
+        ctx.fillRect(Math.floor(p.x + 1), Math.floor(p.y + PLAYER_HEIGHT), PLAYER_WIDTH - 2, 3);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // --- Debug: Player AABB ---
+        ctx.save();
+        ctx.strokeStyle = p.onGround ? "#27e827" : "#ff5555";
+        ctx.lineWidth = 1.3;
+        ctx.setLineDash([2, 2]);
+        ctx.strokeRect(Math.floor(p.x), Math.floor(p.y), PLAYER_WIDTH, PLAYER_HEIGHT);
+        ctx.restore();
+
+        // --- Controls ---
+        ctx.save();
+        ctx.font = "bold 13px 'Press Start 2P', monospace";
+        ctx.fillStyle = "#fffd";
+        ctx.shadowColor = "#111";
+        ctx.shadowBlur = 1.2;
+        ctx.fillText("Minimal Platformer", 10, 21);
+        ctx.font = "9px monospace";
+        ctx.fillStyle = "#ffd700";
+        ctx.shadowBlur = 0;
+        ctx.fillText("← → or A/D to move, Space/W/↑ to jump", 13, 33);
+        ctx.restore();
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+    // On unmount, stop loop
+    return () => {
+      running = false;
+    };
   }, []);
-  const handleNextLevel = useCallback(({ levelName }) => {
-    setGameFlowOverlay('nextlevel');
-    setGameOverlayMessage(`Level Complete!${levelName ? " Next: " + levelName : ""}`);
-  }, []);
-  const handleResumeAfterOverlay = useCallback(() => setGameFlowOverlay(null), []);
-  const handleAllLevelsComplete = useCallback(() => {
-    setGameFlowOverlay('allcomplete');
-    setGameOverlayMessage("All Levels Complete!\nCongratulations!");
+
+  // Autofocus canvas for keyboard (for future: mobile/gamepad can be added)
+  useEffect(() => {
+    if (canvasRef.current) canvasRef.current.focus();
   }, []);
 
-  // All engine hooks passed as props
-  const gameEngineProps = {
-    onGameStateUpdate: handleGameStateUpdate,
-    onGameOver: handleGameOver,
-    onNextLevel: handleNextLevel,
-    onAllLevelsComplete: handleAllLevelsComplete,
-    lives, score, gems, maxGems, level: currentLevel,
-    gameFlowOverlay,
-    onDismissOverlay: handleResumeAfterOverlay,
-  };
+  // Canvas physical size management (pixel-perfect retro scaling)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = GAME_WIDTH;
+      canvas.height = GAME_HEIGHT;
+      canvas.style.width = `${GAME_WIDTH * PIXEL_SCALE}px`;
+      canvas.style.height = `${GAME_HEIGHT * PIXEL_SCALE}px`;
+      canvas.style.background = "#181824";
+      canvas.style.imageRendering = "pixelated";
+    }
+  }, []);
 
-  // Robust error fallback render if screen/overlay is corrupt.
-  let content = null;
-  try {
-    content = (
-      <GameLayout screen={screen}>
-        {screen === 'menu' && (
-          <MainMenu
-            onStartGame={handleStartGame}
-            onShowSettings={() => showOverlay('settings')}
-            onShowAchievements={() => showOverlay('achievements')}
-            onShowLeaderboards={() => showOverlay('leaderboards')}
-            onShowLevelSelect={handleShowLevelSelect}
-          />
-        )}
-        {screen === 'levelselect' && (
-          <LevelSelect
-            onBack={handleReturnToMenu}
-            // onSelectLevel: to be expanded in future.
-          />
-        )}
-        {screen === 'game' && (
-          <>
-            <HUD score={score} lives={lives} gems={gems} maxGems={maxGems} />
-            <GameEngine {...gameEngineProps} />
-            {gameFlowOverlay && (
-              <div className="overlay"
-                style={{
-                  position: "fixed", top: "50%", left: "50%",
-                  transform: "translate(-50%,-50%)",
-                  minWidth: 280, minHeight: 100, zIndex: 50,
-                  background: 'var(--px-window, #222d)',
-                  border: '4px solid var(--px-hud-border, #8cf)',
-                  boxShadow: '0 0 20px #3339',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: "'Press Start 2P',monospace",
-                  color: '#ffd700',
-                  textAlign: "center",
-                  fontSize: 22,
-                  padding: "30px 18px",
-                }}>
-                <div style={{ marginBottom: 16, whiteSpace: "pre-line" }}>{gameOverlayMessage}</div>
-                <button
-                  className="px-btn"
-                  style={{ marginTop: 18, fontSize: "1rem" }}
-                  autoFocus
-                  tabIndex={0}
-                  onClick={
-                    gameFlowOverlay === 'gameover' ? handleReturnToMenu :
-                      handleResumeAfterOverlay
-                  }
-                >
-                  {gameFlowOverlay === 'gameover'
-                    ? 'Return to Menu'
-                    : (gameFlowOverlay === "allcomplete" ? '🎉 Menu' : 'Continue')}
-                </button>
-              </div>
-            )}
-          </>
-        )}
-        {overlay === 'settings' && (
-          <SettingsOverlay onClose={closeOverlay} />
-        )}
-        {overlay === 'achievements' && (
-          <AchievementsOverlay onClose={closeOverlay} />
-        )}
-        {overlay === 'leaderboards' && (
-          <LeaderboardsOverlay onClose={closeOverlay} />
-        )}
-      </GameLayout>
-    );
-  } catch (e) {
-    // Robust error fallback UI
-    content = (
-      <div style={{
-        color: "#ffd6a3", background: "#401020", border: "3px solid #fc4", padding: 22,
-        fontFamily: "'Press Start 2P', monospace"
-      }}>
-        <h2>Oops! The game encountered a crash.</h2>
-        <div style={{ color: "#fff" }}>Please reload or return to the menu.<br />Error: <span style={{ color: "#fb6" }}>{e.message}</span></div>
-        <button className="px-btn" style={{ marginTop: 16 }} onClick={handleReturnToMenu}>Return to Menu</button>
-      </div>
-    );
-  }
-
+  // Render only the canvas, centered vertically and horizontally
   return (
-    <div className="App">
-      <button
-        className="theme-toggle"
-        onClick={toggleTheme}
-        aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-      >
-        {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
-      </button>
-      {content}
+    <div
+      className="App"
+      style={{
+        minHeight: "100vh",
+        background: "var(--px-bg, #181824)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center"
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        width={GAME_WIDTH}
+        height={GAME_HEIGHT}
+        tabIndex={0}
+        className="pixel-canvas"
+        style={{
+          outline: "none",
+          imageRendering: "pixelated",
+          marginTop: "32px"
+        }}
+        aria-label="Core platformer game canvas"
+      />
     </div>
   );
 }
