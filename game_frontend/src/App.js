@@ -1,6 +1,11 @@
 import React, { useRef, useEffect, useState } from "react";
 import "./App.css";
 import LEVELS from "./engine/levels";
+import {
+  isPlayerOnAnyPlatform,
+  isCollidingWithAnyPlatform,
+  rectsOverlap as physicsRectsOverlap
+} from "./engine/Physics";
 
 // --- Constants ---
 const GAME_WIDTH = 640;
@@ -9,12 +14,9 @@ const PIXEL_SCALE = 2;
 const PLAYER_W = 12, PLAYER_H = 14;
 const ENEMY_W = 14, ENEMY_H = 12;
 const GEM_RADIUS = 6;
-const GROUND_HEIGHT = 80; // Doubled
 const MOVE_SPEED = 128;   // Slightly increased for larger world
 const JUMP_VEL = -260;
 const GRAVITY = 980;
-
-// --- Triple jump constant: maximum allowed jumps before landing ---
 const MAX_JUMPS = 3;
 
 function clamp(val, min, max) {
@@ -24,7 +26,12 @@ function clamp(val, min, max) {
 // Axis-aligned bounding box collision
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
   // Tightly includes all sides, helps with pixel-accurate collision at edges/corners
-  return (ax + aw) > bx && ax < (bx + bw) && (ay + ah) > by && ay < (by + bh);
+  return (
+    ax < bx + bw &&
+    ax + aw > bx &&
+    ay < by + bh &&
+    ay + ah > by
+  );
 }
 // Circle-rect overlap (for player-gem)
 function circleRectOverlap(cx, cy, r, rx, ry, rw, rh) {
@@ -308,28 +315,64 @@ function App() {
 
       // ENEMY ARRAY update: iterate all enemies and apply their simple logic if walker/hopper/chaser/projectile
       let nextEnemies = enemies.map(e => ({ ...e }));
-      // Walker/hopper: patrol logic; chaser: nothing special here; projectile: nothing needed here
+
+      // --- Robust enemy platform collision/standing/AI ---
       for (let i = 0; i < nextEnemies.length; ++i) {
         let e = nextEnemies[i];
+        // Walker: horizontal patrol on platform only, fall if not supported!
         if (e.type === "walker") {
-          e.x += e.dir * (e.speed ?? 44) * dt;
-          if (e.x < (e.patrolMin ?? 0)) {
-            e.x = e.patrolMin ?? 0; e.dir = 1;
-          }
-          if (e.x > (e.patrolMax ?? (GAME_WIDTH - ENEMY_W))) {
-            e.x = e.patrolMax ?? (GAME_WIDTH - ENEMY_W); e.dir = -1;
+          e.vx = e.dir * (e.speed ?? 44);
+          e.x += e.vx * dt;
+          // Platform edge handling: fall if not supported, turn at bounds.
+          // Find platform walker is standing on:
+          let footPlatform = isPlayerOnAnyPlatform(
+            e.x,
+            e.y,
+            ENEMY_W,
+            ENEMY_H,
+            L.platforms,
+            true
+          );
+          if (footPlatform) {
+            // Patrol reversal at min/max edge
+            if (e.x < (e.patrolMin ?? 0)) {
+              e.x = e.patrolMin ?? 0; e.dir = 1;
+            }
+            if (e.x > (e.patrolMax ?? (GAME_WIDTH - ENEMY_W))) {
+              e.x = e.patrolMax ?? (GAME_WIDTH - ENEMY_W); e.dir = -1;
+            }
+            // Prevent sinking
+            e.y = footPlatform.y - ENEMY_H;
+            e.vy = 0;
+            e.onGround = true;
+          } else {
+            // Not supported, fall!
+            e.vy = (e.vy || 0) + GRAVITY * dt;
+            e.y += e.vy * dt;
+            e.onGround = false;
           }
         }
+        // Hopper: vertical jumps, must land on platform
         if (e.type === "hopper") {
-          // Simple vertical "hop" AI (could be expanded)
           e.jumpTimer = e.jumpTimer || 0;
           e.vy = e.vy || 0;
           e.jumpCooldown = e.jumpCooldown ?? 1.11;
+          // Apply gravity if not grounded
           if (!e.onGround) e.vy += 440 * dt;
           e.y += e.vy * dt;
-          if (e.y > GAME_HEIGHT - ENEMY_H - 8) {
+          // Stand check (just like player)
+          let stand = isPlayerOnAnyPlatform(e.x, e.y, ENEMY_W, ENEMY_H, L.platforms, true);
+          if (stand && e.vy >= 0) {
+            e.y = stand.y - ENEMY_H;
+            e.vy = 0;
+            e.onGround = true;
+          } else if (e.y > GAME_HEIGHT - ENEMY_H - 8) {
+            // Fall to world ground if no platform below
             e.y = GAME_HEIGHT - ENEMY_H - 8;
-            e.vy = 0; e.onGround = true;
+            e.vy = 0;
+            e.onGround = true;
+          } else {
+            e.onGround = false;
           }
           e.jumpTimer -= dt;
           if (e.onGround && e.jumpTimer <= 0) {
@@ -338,39 +381,55 @@ function App() {
             e.jumpTimer = e.jumpCooldown;
           }
         }
+        // Chaser: only x-direction AI, check y-support for standing/fall
         if (e.type === "chaser") {
           let dx = p.x - e.x, dy = p.y - e.y;
           if (Math.abs(dx) < (e.activeRange ?? 100) && Math.abs(dy) < 56) {
-            e.x += Math.sign(dx) * (e.speed ?? 65) * dt;
+            e.vx = Math.sign(dx) * (e.speed ?? 65);
+            e.x += e.vx * dt;
             if (e.x < 0) e.x = 0;
             if (e.x > GAME_WIDTH - ENEMY_W) e.x = GAME_WIDTH - ENEMY_W;
+          }
+          // Apply gravity and check for support
+          let stand = isPlayerOnAnyPlatform(e.x, e.y, ENEMY_W, ENEMY_H, L.platforms, true);
+          if (stand && (e.vy ?? 0) >= 0) {
+            e.y = stand.y - ENEMY_H;
+            e.vy = 0;
+            e.onGround = true;
+          } else if (e.y > GAME_HEIGHT - ENEMY_H - 8) {
+            e.y = GAME_HEIGHT - ENEMY_H - 8;
+            e.vy = 0;
+            e.onGround = true;
+          } else {
+            e.vy = (e.vy || 0) + GRAVITY * dt;
+            e.y += e.vy * dt;
+            e.onGround = false;
           }
         }
         // projectiles are not handled in this simplified demo
       }
       setEnemies(nextEnemies);
 
-      // --- PLATFORM collision ---
+      // --- PLATFORM/GROUND COLLISION (robust flush logic using Physics.js) ---
       let isOnGround = false;
-      let standPlatform = null;
-      for (let pl of L.platforms) {
-        if (
-          (p.x + PLAYER_W) > (pl.x + 0.5) &&
-          (p.x + 0.5) < (pl.x + pl.w) &&
-          Math.abs((p.y + PLAYER_H) - pl.y) < 1.15 &&
-          p.vy >= 0
-        ) {
-          if ((p.y + PLAYER_H) <= pl.y + pl.h) {
-            p.y = pl.y - PLAYER_H;
-            p.vy = 0;
-            isOnGround = true;
-            standPlatform = pl;
-            break;
-          }
-        }
+      let standPlatform = isPlayerOnAnyPlatform(
+        p.x,
+        p.y,
+        PLAYER_W,
+        PLAYER_H,
+        L.platforms,
+        true // flush, strict
+      );
+      if (standPlatform && p.vy >= 0) {
+        // Snap to platform
+        p.y = standPlatform.y - PLAYER_H;
+        p.vy = 0;
+        isOnGround = true;
       }
-      // Horizontal wall collision after vertical snap
+
+      // Horizontal wall collision: prevent wall clipping via AABB after vertical snap
       for (let pl of L.platforms) {
+        // Only if inside platform vertically, check x overlap
         if (
           p.y + PLAYER_H > pl.y + 2 &&
           p.y < pl.y + pl.h - 2 &&
