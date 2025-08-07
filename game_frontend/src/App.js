@@ -15,8 +15,9 @@ const PLAYER_W = 12, PLAYER_H = 14;
 const ENEMY_W = 14, ENEMY_H = 12;
 const GEM_RADIUS = 6;
 const MOVE_SPEED = 128;   // Slightly increased for larger world
-const JUMP_VEL = -260;
-const GRAVITY = 980;
+// Increase jump height for all jumps
+const JUMP_VEL = -410; // Was -260; much higher jump for easier reach everywhere
+const GRAVITY = 980;   // Tune this lower if needed, but 980 gives tight fast jumps
 const MAX_JUMPS = 3;
 
 function clamp(val, min, max) {
@@ -432,7 +433,8 @@ function App() {
             p.jumpCount = 1;
             p.onGround = false;
           } else if (p.jumpCount < MAX_JUMPS) {
-            p.vy = JUMP_VEL * 0.93;
+            // Air jump (double/triple): keep it almost as strong as main jump for forgiving vertical movement
+            p.vy = JUMP_VEL * 0.98;
             p.jumpCount += 1;
           }
         }
