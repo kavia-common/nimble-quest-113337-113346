@@ -332,8 +332,9 @@ const GameEngine = ({
         if (pLives - 1 <= 0) {
           if (onGameOver) onGameOver();
         } else {
-          // Restart level, maintain updated lives
-          setLevelIdx(idx => idx);
+          // --- Restart level: Construct a fresh Player instance to restore jump/dash state ---
+          playerRef.current = new Player({ x: 16, y: 120 });
+          setLevelIdx(idx => idx); // triggers useEffect; also resets levelState, etc.
           setPScore(prevS => prevS); // score persists
           setPGems(0); // reset collected for level
         }
@@ -512,6 +513,13 @@ const GameEngine = ({
         },
         setForceRerender
       );
+
+      // --- FALLING OFF MAP = DEATH ---
+      // Detect if player has fallen too far below level; trigger defeat if so.
+      const FALL_DEATH_Y = GAME_HEIGHT + 32;
+      if (!levelState.completed && !levelState.transitioning && player.y > FALL_DEATH_Y) {
+        defeatPlayer();
+      }
 
       // ENEMY & PROJECTILE COLLISION with player
       // (If player collides with any enemy or projectile, defeat)
